@@ -230,11 +230,11 @@ void TestAudioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds();
     
-    // Title area (fixed at top)
-    titleLabel.setBounds(bounds.removeFromTop(35).reduced(10));
+    // Title area (more space for text)
+    titleLabel.setBounds(bounds.removeFromTop(45).reduced(10));
     
-    // Current phone label
-    currentPhoneLabel.setBounds(bounds.removeFromTop(25).reduced(10));
+    // Current phone label (more space for text)
+    currentPhoneLabel.setBounds(bounds.removeFromTop(35).reduced(10));
     
     // Reserve bottom area for buttons (fixed)
     auto buttonArea = bounds.removeFromBottom(BUTTON_AREA_HEIGHT);
