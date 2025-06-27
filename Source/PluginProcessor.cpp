@@ -10,6 +10,7 @@ const juce::String TestAudioProcessor::PHONE_TYPE_ID = "phoneType";
 const juce::String TestAudioProcessor::NOISE_LEVEL_ID = "noiseLevel";
 const juce::String TestAudioProcessor::INTERFERENCE_ID = "interference";
 const juce::String TestAudioProcessor::COMPRESSION_ID = "compression";
+const juce::String TestAudioProcessor::TV_INTERFERENCE_ID = "tvInterference";  // NEW: TV interference toggle
 
 // NEW: Simplified interference preset system
 const juce::String TestAudioProcessor::INTERFERENCE_PRESET_ID = "interferencePreset";
@@ -37,6 +38,7 @@ TestAudioProcessor::TestAudioProcessor()
     noiseLevelParam = apvts.getRawParameterValue(NOISE_LEVEL_ID);
     interferenceParam = apvts.getRawParameterValue(INTERFERENCE_ID);
     compressionParam = apvts.getRawParameterValue(COMPRESSION_ID);
+    tvInterferenceParam = apvts.getRawParameterValue(TV_INTERFERENCE_ID);  // NEW: TV interference toggle
     
     // NEW: Simplified interference preset parameter
     interferencePresetParam = apvts.getRawParameterValue(INTERFERENCE_PRESET_ID);
@@ -51,6 +53,12 @@ TestAudioProcessor::TestAudioProcessor()
     nokiaDigitalPhase = 0.0f;
     iphoneWarmthPhase = 0.0f;
     sonyAnalogPhase = 0.0f;
+    
+    // Initialize TV interference state
+    tvInterferencePhase = 0.0f;
+    tvScanlinePhase = 0.0f;
+    tvBurstTimer = 0.0f;
+    tvBurstState = 0;
 }
 
 TestAudioProcessor::~TestAudioProcessor()
@@ -114,6 +122,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout TestAudioProcessor::createPa
         juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.4f,
         juce::String(), juce::AudioProcessorParameter::genericParameter,
         [](float value, int) { return juce::String(static_cast<int>(value * 100)) + " %"; }
+    ));
+    
+    // TV Interference (On/Off toggle)
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
+        TV_INTERFERENCE_ID, "TV Interference",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 1.0f), 0.0f,
+        juce::String(), juce::AudioProcessorParameter::genericParameter,
+        [](float value, int) { return value > 0.5f ? "ON" : "OFF"; }
     ));
     
     // NEW: Simplified interference preset parameter
@@ -223,6 +239,12 @@ void TestAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     nokiaDigitalPhase = 0.0f;
     iphoneWarmthPhase = 0.0f;
     sonyAnalogPhase = 0.0f;
+    
+    // Initialize TV interference state
+    tvInterferencePhase = 0.0f;
+    tvScanlinePhase = 0.0f;
+    tvBurstTimer = 0.0f;
+    tvBurstState = 0;
 }
 
 void TestAudioProcessor::releaseResources()
@@ -290,6 +312,7 @@ void TestAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     auto interferenceLevel = interferenceParam->load();
     auto compressionLevel = compressionParam->load();
     auto interferencePreset = static_cast<int>(interferencePresetParam->load());
+    auto tvInterferenceLevel = tvInterferenceParam->load();  // NEW: TV interference toggle
     
     // Apply phone-specific processing with authentic interference
     for (int channel = 0; channel < totalNumOutputChannels; ++channel)
@@ -306,6 +329,12 @@ void TestAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             // Apply phone-specific interference based on preset
             input = applyAuthenticInterference(input, phoneType, interferencePreset, 
                                              noiseLevel, interferenceLevel);
+            
+            // NEW: Apply TV interference if enabled (THE FEATURE YOU'VE BEEN WAITING FOR!)
+            if (tvInterferenceLevel > 0.5f)
+            {
+                input = applyTVInterference(input, phoneType, tvInterferenceLevel);
+            }
             
             // Apply distortion
             if (distortionAmount > 0.0f)
@@ -637,6 +666,116 @@ void TestAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
     if (xmlState.get() != nullptr)
         if (xmlState->hasTagName(apvts.state.getType()))
             apvts.replaceState(juce::ValueTree::fromXml(*xmlState));
+}
+
+//==============================================================================
+// TV INTERFERENCE METHODS (Phase 4: The TV Interference You've Been Waiting For!)
+
+float TestAudioProcessor::applyTVInterference(float input, PhoneType phoneType, float intensity)
+{
+    if (intensity < 0.5f) return input; // TV interference is OFF
+    
+    switch (phoneType)
+    {
+        case Nokia:
+            return generateNokiaTVInterference(input, intensity);
+        case iPhone:
+            return generateIPhoneTVInterference(input, intensity);
+        case SonyEricsson:
+            return generateSonyTVInterference(input, intensity);
+        default:
+            return input;
+    }
+}
+
+float TestAudioProcessor::generateNokiaTVInterference(float input, float intensity)
+{
+    // Nokia 3310 near CRT TV: Classic GSM interference with TV scanline buzz
+    
+    // TV scanline frequency (15.625 kHz for PAL, 15.734 kHz for NTSC)
+    tvScanlinePhase += 2.0f * juce::MathConstants<float>::pi * 15625.0f / static_cast<float>(currentSampleRate);
+    
+    // GSM burst pattern interfering with TV
+    tvBurstTimer += 1.0f / static_cast<float>(currentSampleRate);
+    if (tvBurstTimer >= 0.0046f) // GSM burst every 4.6ms
+    {
+        tvBurstTimer = 0.0f;
+        tvBurstState = (tvBurstState + 1) % 4; // 4-state burst pattern
+    }
+    
+    // Generate authentic Nokia TV buzz
+    float tvBuzz = 0.0f;
+    if (tvBurstState == 0 || tvBurstState == 2) // Active burst states
+    {
+        // 217Hz GSM carrier with TV scanline modulation
+        tvInterferencePhase += 2.0f * juce::MathConstants<float>::pi * 217.0f / static_cast<float>(currentSampleRate);
+        float gsmCarrier = std::sin(tvInterferencePhase);
+        float scanlineModulation = std::sin(tvScanlinePhase) * 0.3f;
+        
+        tvBuzz = gsmCarrier * (0.8f + scanlineModulation) * 0.15f * intensity;
+        
+        // Add digital clicking from phone's RF interference
+        if (tvRandom.nextFloat() > 0.92f)
+        {
+            tvBuzz += (tvRandom.nextFloat() * 2.0f - 1.0f) * 0.2f * intensity;
+        }
+    }
+    
+    return input + tvBuzz;
+}
+
+float TestAudioProcessor::generateIPhoneTVInterference(float input, float intensity)
+{
+    // iPhone near modern LCD/LED TV: Digital switching noise and power supply whine
+    
+    // LCD refresh rate interference (60Hz and harmonics)
+    tvScanlinePhase += 2.0f * juce::MathConstants<float>::pi * 60.0f / static_cast<float>(currentSampleRate);
+    tvInterferencePhase += 2.0f * juce::MathConstants<float>::pi * 120.0f / static_cast<float>(currentSampleRate);
+    
+    // Digital switching noise from iPhone's power management
+    float switchingNoise = std::sin(tvInterferencePhase) * 0.1f;
+    float refreshNoise = std::sin(tvScanlinePhase) * 0.05f;
+    
+    // Combine with subtle digital artifacts
+    float digitalBuzz = (switchingNoise + refreshNoise) * intensity * 0.08f;
+    
+    // Occasional digital pops from data transmission
+    if (tvRandom.nextFloat() > 0.995f)
+    {
+        digitalBuzz += (tvRandom.nextFloat() * 2.0f - 1.0f) * 0.1f * intensity;
+    }
+    
+    return input + digitalBuzz;
+}
+
+float TestAudioProcessor::generateSonyTVInterference(float input, float intensity)
+{
+    // Sony Ericsson near old CRT TV: Analog interference with magnetic field buzz
+    
+    // CRT horizontal sweep frequency (15.625 kHz) with analog flutter
+    float flutterAmount = tvRandom.nextFloat() * 0.02f - 0.01f;
+    tvScanlinePhase += 2.0f * juce::MathConstants<float>::pi * (15625.0f + flutterAmount * 100.0f) / static_cast<float>(currentSampleRate);
+    
+    // Magnetic field interference from CRT deflection coils
+    tvInterferencePhase += 2.0f * juce::MathConstants<float>::pi * 50.0f / static_cast<float>(currentSampleRate); // 50Hz mains hum
+    
+    // Generate analog TV interference
+    float magneticBuzz = std::sin(tvScanlinePhase) * 0.12f;
+    float mainsHum = std::sin(tvInterferencePhase) * 0.06f;
+    
+    // Add analog static and crackle
+    float analogStatic = (tvRandom.nextFloat() * 2.0f - 1.0f) * 0.03f;
+    
+    // Combine all analog interference
+    float analogInterference = (magneticBuzz + mainsHum + analogStatic) * intensity * 0.1f;
+    
+    // Occasional analog pops from phone's RF affecting CRT
+    if (tvRandom.nextFloat() > 0.985f)
+    {
+        analogInterference += (tvRandom.nextFloat() * 2.0f - 1.0f) * 0.15f * intensity;
+    }
+    
+    return input + analogInterference;
 }
 
 //==============================================================================

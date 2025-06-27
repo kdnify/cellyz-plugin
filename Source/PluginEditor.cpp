@@ -114,7 +114,7 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     
     // NEW: Interference button attachment
     interferenceButtonAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
-        audioProcessor.apvts, TestAudioProcessor::INTERFERENCE_PRESET_ID, interferenceButton);
+        audioProcessor.apvts, TestAudioProcessor::TV_INTERFERENCE_ID, interferenceButton);
     
     // Configure labels
     lowCutLabel.setText("Low Cut", juce::dontSendNotification);
@@ -153,8 +153,8 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     compressionLabel.setFont(juce::Font(12.0f));
     addAndMakeVisible(compressionLabel);
     
-    // NEW: Red interference button label
-    interferenceButtonLabel.setText("Error", juce::dontSendNotification);
+    // NEW: Red TV interference button label
+    interferenceButtonLabel.setText("TV Buzz", juce::dontSendNotification);
     interferenceButtonLabel.setJustificationType(juce::Justification::centred);
     interferenceButtonLabel.setColour(juce::Label::textColourId, juce::Colour(0xffff6666));
     interferenceButtonLabel.setFont(juce::Font(12.0f));

@@ -61,6 +61,7 @@ public:
     static const juce::String NOISE_LEVEL_ID;
     static const juce::String INTERFERENCE_ID;
     static const juce::String COMPRESSION_ID;
+    static const juce::String TV_INTERFERENCE_ID;  // NEW: TV interference toggle
     
     // NEW: Authentic interference preset system
     static const juce::String INTERFERENCE_PRESET_ID;
@@ -140,6 +141,12 @@ public:
     float applyIPhoneTonalColor(float input, float intensity);
     float applySonyEricssonTonalColor(float input, float intensity);
 
+    // NEW: TV Interference methods (Phase 4)
+    float applyTVInterference(float input, PhoneType phoneType, float intensity);
+    float generateNokiaTVInterference(float input, float intensity);
+    float generateIPhoneTVInterference(float input, float intensity);
+    float generateSonyTVInterference(float input, float intensity);
+
 private:
     //==============================================================================
     
@@ -158,6 +165,7 @@ private:
     std::atomic<float>* noiseLevelParam = nullptr;
     std::atomic<float>* interferenceParam = nullptr;
     std::atomic<float>* compressionParam = nullptr;
+    std::atomic<float>* tvInterferenceParam = nullptr;  // NEW: TV interference toggle
     
     // NEW: Simplified interference preset parameter
     std::atomic<float>* interferencePresetParam = nullptr;
@@ -264,6 +272,13 @@ private:
     float iphoneWarmthPhase = 0.0f;        // iPhone's warm digital processing
     float sonyAnalogPhase = 0.0f;          // Sony's analog character
     float tonalColoringIntensity = 0.15f;  // Much more subtle overall tonal coloring
+    
+    // NEW: TV Interference variables
+    float tvInterferencePhase = 0.0f;      // Main TV interference oscillation
+    float tvScanlinePhase = 0.0f;          // CRT scanline frequency
+    float tvBurstTimer = 0.0f;             // Burst pattern timing
+    int tvBurstState = 0;                  // Current burst state
+    juce::Random tvRandom;                 // Random for TV static
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TestAudioProcessor)
 }; 
