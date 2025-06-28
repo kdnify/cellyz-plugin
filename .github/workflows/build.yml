@@ -1,0 +1,76 @@
+name: Build Plugin
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+        include:
+          - os: macos-latest
+            generator: Xcode
+            config: Release
+            artifact: macOS
+          - os: windows-latest
+            generator: "Visual Studio 17 2022"
+            config: Release
+            artifact: Windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup JUCE
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" == "macOS" ]; then
+          curl -L -o juce.zip "https://github.com/juce-framework/JUCE/releases/download/7.0.9/juce-7.0.9-osx.zip"
+          unzip juce.zip
+          sudo cp -r JUCE /usr/local/
+        else
+          curl -L -o juce.zip "https://github.com/juce-framework/JUCE/releases/download/7.0.9/juce-7.0.9-windows.zip"
+          unzip juce.zip
+          echo "JUCE_DIR=$PWD/JUCE" >> $GITHUB_ENV
+        fi
+
+    - name: Build macOS
+      if: matrix.os == 'macos-latest'
+      run: |
+        cd Builds/MacOSX
+        xcodebuild -project test.xcodeproj -scheme "test - AU" -configuration Release
+        xcodebuild -project test.xcodeproj -scheme "test - VST3" -configuration Release || true
+
+    - name: Build Windows
+      if: matrix.os == 'windows-latest'
+      run: |
+        cd Builds/Windows
+        msbuild Cellyz.sln -p:Configuration=Release -p:Platform=x64
+
+    - name: Package Artifacts
+      shell: bash
+      run: |
+        mkdir -p artifacts
+        if [ "$RUNNER_OS" == "macOS" ]; then
+          if [ -d "Builds/MacOSX/build/Release/test.component" ]; then
+            cp -r "Builds/MacOSX/build/Release/test.component" artifacts/
+          fi
+          if [ -d "Builds/MacOSX/build/Release/test.vst3" ]; then
+            cp -r "Builds/MacOSX/build/Release/test.vst3" artifacts/
+          fi
+        else
+          if [ -d "Builds/Windows/x64/Release/VST3/test.vst3" ]; then
+            cp -r "Builds/Windows/x64/Release/VST3/test.vst3" artifacts/
+          fi
+        fi
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.artifact }}-Build
+        path: artifacts/ 

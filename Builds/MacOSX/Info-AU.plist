@@ -8,11 +8,11 @@
     <key>CFBundleIconFile</key>
     <string></string>
     <key>CFBundleIdentifier</key>
-    <string>com.yourcompany.test</string>
+    <string>com.CellyzAudio.Cellyz</string>
     <key>CFBundleName</key>
-    <string>test</string>
+    <string>Cellyz</string>
     <key>CFBundleDisplayName</key>
-    <string>test</string>
+    <string>Cellyz</string>
     <key>CFBundlePackageType</key>
     <string>BNDL</string>
     <key>CFBundleSignature</key>
@@ -22,18 +22,18 @@
     <key>CFBundleVersion</key>
     <string>1.0.0</string>
     <key>NSHumanReadableCopyright</key>
-    <string></string>
+    <string>Cellyz Audio</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>AudioComponents</key>
     <array>
       <dict>
         <key>name</key>
-        <string>yourcompany: test</string>
+        <string>Cellyz Audio: Cellyz Phone FX</string>
         <key>description</key>
-        <string>test</string>
+        <string>Professional phone call effects plugin with authentic signal simulation</string>
         <key>factoryFunction</key>
-        <string>testAUFactory</string>
+        <string>CellyzAUFactory</string>
         <key>manufacturer</key>
         <string>Manu</string>
         <key>type</key>

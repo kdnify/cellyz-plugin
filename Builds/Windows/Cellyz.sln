@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio Version 17
+
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Cellyz - VST3", "Cellyz_VST3.vcxproj", "{F79E3BBA-9422-00AF-ABF4-9C1A02234E6B}"
+	ProjectSection(ProjectDependencies) = postProject
+		{3B2288E8-FA08-F10F-064F-065E867B307B} = {3B2288E8-FA08-F10F-064F-065E867B307B}
+		{A68A35C3-5466-6628-C80D-3FA0ED878AAF} = {A68A35C3-5466-6628-C80D-3FA0ED878AAF}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Cellyz - Shared Code", "Cellyz_SharedCode.vcxproj", "{3B2288E8-FA08-F10F-064F-065E867B307B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Cellyz - VST3 Manifest Helper", "Cellyz_VST3ManifestHelper.vcxproj", "{A68A35C3-5466-6628-C80D-3FA0ED878AAF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F79E3BBA-9422-00AF-ABF4-9C1A02234E6B}.Debug|x64.ActiveCfg = Debug|x64
+		{F79E3BBA-9422-00AF-ABF4-9C1A02234E6B}.Debug|x64.Build.0 = Debug|x64
+		{F79E3BBA-9422-00AF-ABF4-9C1A02234E6B}.Release|x64.ActiveCfg = Release|x64
+		{F79E3BBA-9422-00AF-ABF4-9C1A02234E6B}.Release|x64.Build.0 = Release|x64
+		{3B2288E8-FA08-F10F-064F-065E867B307B}.Debug|x64.ActiveCfg = Debug|x64
+		{3B2288E8-FA08-F10F-064F-065E867B307B}.Debug|x64.Build.0 = Debug|x64
+		{3B2288E8-FA08-F10F-064F-065E867B307B}.Release|x64.ActiveCfg = Release|x64
+		{3B2288E8-FA08-F10F-064F-065E867B307B}.Release|x64.Build.0 = Release|x64
+		{A68A35C3-5466-6628-C80D-3FA0ED878AAF}.Debug|x64.ActiveCfg = Debug|x64
+		{A68A35C3-5466-6628-C80D-3FA0ED878AAF}.Debug|x64.Build.0 = Debug|x64
+		{A68A35C3-5466-6628-C80D-3FA0ED878AAF}.Release|x64.ActiveCfg = Release|x64
+		{A68A35C3-5466-6628-C80D-3FA0ED878AAF}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

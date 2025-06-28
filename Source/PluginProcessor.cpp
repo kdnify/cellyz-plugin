@@ -15,6 +15,13 @@ const juce::String TestAudioProcessor::TV_INTERFERENCE_ID = "tvInterference";  /
 // NEW: Simplified interference preset system
 const juce::String TestAudioProcessor::INTERFERENCE_PRESET_ID = "interferencePreset";
 
+// PHASE 5: Advanced Audio Processing Parameter IDs
+const juce::String TestAudioProcessor::CODEC_TYPE_ID = "codecType";
+const juce::String TestAudioProcessor::PACKET_LOSS_ID = "packetLoss";  
+const juce::String TestAudioProcessor::CALL_POSITION_ID = "callPosition";
+const juce::String TestAudioProcessor::AMBIENCE_TYPE_ID = "ambienceType";
+const juce::String TestAudioProcessor::AMBIENCE_LEVEL_ID = "ambienceLevel";
+
 //==============================================================================
 TestAudioProcessor::TestAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -43,6 +50,13 @@ TestAudioProcessor::TestAudioProcessor()
     // NEW: Simplified interference preset parameter
     interferencePresetParam = apvts.getRawParameterValue(INTERFERENCE_PRESET_ID);
     
+    // PHASE 5: Advanced Audio Processing Parameter Pointers
+    codecTypeParam = apvts.getRawParameterValue(CODEC_TYPE_ID);
+    packetLossParam = apvts.getRawParameterValue(PACKET_LOSS_ID);
+    callPositionParam = apvts.getRawParameterValue(CALL_POSITION_ID);
+    ambienceTypeParam = apvts.getRawParameterValue(AMBIENCE_TYPE_ID);
+    ambienceLevelParam = apvts.getRawParameterValue(AMBIENCE_LEVEL_ID);
+    
     // Initialize noise buffer
 
     compressionGain = 1.0f;
@@ -70,20 +84,40 @@ juce::AudioProcessorValueTreeState::ParameterLayout TestAudioProcessor::createPa
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> parameters;
     
-    // Low Cut Frequency (50Hz - 2000Hz)
+    // Low Cut Frequency - Discrete preset positions (using AudioParameterFloat with discrete steps)
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
         LOW_CUT_ID, "Low Cut", 
-        juce::NormalisableRange<float>(50.0f, 2000.0f, 1.0f), 400.0f,
+        juce::NormalisableRange<float>(0.0f, 4.0f, 1.0f), 0.0f,
         juce::String(), juce::AudioProcessorParameter::genericParameter,
-        [](float value, int) { return juce::String(static_cast<int>(value)) + " Hz"; }
+        [](float value, int) { 
+            int index = static_cast<int>(value);
+            switch (index) {
+                case 0: return juce::String("Off");
+                case 1: return juce::String("180Hz");
+                case 2: return juce::String("250Hz");
+                case 3: return juce::String("300Hz");
+                case 4: return juce::String("400Hz");
+                default: return juce::String("Off");
+            }
+        }
     ));
     
-    // High Cut Frequency (1000Hz - 20000Hz)
+    // High Cut Frequency - Discrete preset positions (using AudioParameterFloat with discrete steps)
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
         HIGH_CUT_ID, "High Cut",
-        juce::NormalisableRange<float>(1000.0f, 20000.0f, 1.0f), 4000.0f,
+        juce::NormalisableRange<float>(0.0f, 4.0f, 1.0f), 0.0f,
         juce::String(), juce::AudioProcessorParameter::genericParameter,
-        [](float value, int) { return juce::String(static_cast<int>(value)) + " Hz"; }
+        [](float value, int) { 
+            int index = static_cast<int>(value);
+            switch (index) {
+                case 0: return juce::String("Off");
+                case 1: return juce::String("2.8kHz");
+                case 2: return juce::String("3.2kHz");
+                case 3: return juce::String("3.4kHz");
+                case 4: return juce::String("7kHz");
+                default: return juce::String("Off");
+            }
+        }
     ));
     
     // Distortion Amount (0% - 100%)
@@ -132,10 +166,50 @@ juce::AudioProcessorValueTreeState::ParameterLayout TestAudioProcessor::createPa
         [](float value, int) { return value > 0.5f ? "ON" : "OFF"; }
     ));
     
-    // NEW: Simplified interference preset parameter
+    // REMOVED: Old interference preset parameter (replaced with Signal Quality Choice)
+    
+    // PHASE 5: Advanced Audio Processing Parameters
+    
+    // Codec Type (0-6: GSM Full/Half, CDMA, AMR 4.75/12.2, VoIP, Digital)
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
-        INTERFERENCE_PRESET_ID, "Interference Preset",
-        juce::NormalisableRange<float>(0.0f, 1.0f, 1.0f), 0.0f
+        CODEC_TYPE_ID, "Codec Type",
+        juce::NormalisableRange<float>(0.0f, 6.0f, 1.0f), 0.0f
+    ));
+    
+    // Packet Loss (0% - 50%)
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
+        PACKET_LOSS_ID, "Packet Loss",
+        juce::NormalisableRange<float>(0.0f, 0.5f, 0.01f), 0.0f,
+        juce::String(), juce::AudioProcessorParameter::genericParameter,
+        [](float value, int) { return juce::String(static_cast<int>(value * 100)) + " %"; }
+    ));
+    
+    // Call Position (0-6: Center, Left/Right Ear, Speaker Near/Far, Bluetooth L/R)
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
+        CALL_POSITION_ID, "Call Position", 
+        juce::NormalisableRange<float>(0.0f, 6.0f, 1.0f), 0.0f
+    ));
+    
+    // Ambience Type (0-7: Silent, Café, Car, Street, Tube, Office, Train, Airport)
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
+        AMBIENCE_TYPE_ID, "Ambience Type",
+        juce::NormalisableRange<float>(0.0f, 7.0f, 1.0f), 0.0f
+    ));
+    
+    // Ambience Level (0% - 100%)
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
+        AMBIENCE_LEVEL_ID, "Ambience Level",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.0f,
+        juce::String(), juce::AudioProcessorParameter::genericParameter,
+        [](float value, int) { return juce::String(static_cast<int>(value * 100)) + " %"; }
+    ));
+    
+    // Dynamic Signal Quality parameter (GAME-CHANGING!)
+    parameters.push_back(std::make_unique<juce::AudioParameterChoice>(
+        INTERFERENCE_PRESET_ID,
+        "Signal Quality",
+        juce::StringArray{"Perfect (5 bars)", "Good (4 bars)", "Fair (3 bars)", "Poor (2 bars)", "Breaking Up (1 bar)", "Auto Dynamic"},
+        5 // Default to Auto Dynamic - THE BEST FEATURE!
     ));
     
     return { parameters.begin(), parameters.end() };
@@ -284,26 +358,38 @@ void TestAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
+    
+    // Update parameter smoothing for professional transitions
+    updateParameterSmoothing();
 
-    // Update filter coefficients
-    auto lowCutFreq = lowCutParam->load();
-    auto highCutFreq = highCutParam->load();
-    
-    // High-pass filter (low cut)
-    *lowCutFilter.state = *juce::dsp::IIR::Coefficients<float>::makeHighPass(
-        currentSampleRate, lowCutFreq, 0.707f);
-    
-    // Low-pass filter (high cut)  
-    *highCutFilter.state = *juce::dsp::IIR::Coefficients<float>::makeLowPass(
-        currentSampleRate, highCutFreq, 0.707f);
+    // Update filter coefficients - Convert discrete indices to actual frequencies
+    auto lowCutIndex = static_cast<int>(lowCutParam->load());
+    auto highCutIndex = static_cast<int>(highCutParam->load());
     
     // Create audio block for DSP processing
     juce::dsp::AudioBlock<float> block(buffer);
     juce::dsp::ProcessContextReplacing<float> context(block);
     
-    // Apply filters
-    lowCutFilter.process(context);
-    highCutFilter.process(context);
+    // Apply filters only if not "Off" (index 0)
+    if (lowCutIndex > 0)
+    {
+        // Convert index to frequency
+        float lowCutFreq = getLowCutFrequency(lowCutIndex);
+        // High-pass filter (low cut)
+        *lowCutFilter.state = *juce::dsp::IIR::Coefficients<float>::makeHighPass(
+            currentSampleRate, lowCutFreq, 0.707f);
+        lowCutFilter.process(context);
+    }
+    
+    if (highCutIndex > 0)
+    {
+        // Convert index to frequency
+        float highCutFreq = getHighCutFrequency(highCutIndex);
+        // Low-pass filter (high cut)  
+        *highCutFilter.state = *juce::dsp::IIR::Coefficients<float>::makeLowPass(
+            currentSampleRate, highCutFreq, 0.707f);
+        highCutFilter.process(context);
+    }
     
     // Get current parameter values
     auto phoneType = static_cast<PhoneType>(static_cast<int>(phoneTypeParam->load()));
@@ -313,6 +399,19 @@ void TestAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     auto compressionLevel = compressionParam->load();
     auto interferencePreset = static_cast<int>(interferencePresetParam->load());
     auto tvInterferenceLevel = tvInterferenceParam->load();  // NEW: TV interference toggle
+    
+    // PHASE 5: Advanced Audio Processing Parameters
+    auto codecType = static_cast<CodecType>(static_cast<int>(codecTypeParam->load()));
+    auto packetLoss = packetLossParam->load();
+    auto callPosition = static_cast<CallPosition>(static_cast<int>(callPositionParam->load()));
+    auto ambienceType = static_cast<AmbienceType>(static_cast<int>(ambienceTypeParam->load()));
+    auto ambienceLevel = ambienceLevelParam->load();
+    
+    // Generate background ambience first (affects entire buffer)
+    if (ambienceLevel > 0.0f && ambienceType != Silent)
+    {
+        generateBackgroundAmbience(buffer, ambienceType, ambienceLevel);
+    }
     
     // Apply phone-specific processing with authentic interference
     for (int channel = 0; channel < totalNumOutputChannels; ++channel)
@@ -324,11 +423,23 @@ void TestAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             auto input = channelData[sample];
             
             // Apply phone-specific tonal coloring FIRST (authentic sound character)
-            input = applyPhoneTonalColor(input, phoneType, tonalColoringIntensity);
+            // TEMPORARILY DISABLED: Testing if this contributes to buzzy sound
+            // input = applyPhoneTonalColor(input, phoneType, tonalColoringIntensity);
             
-            // Apply phone-specific interference based on preset
-            input = applyAuthenticInterference(input, phoneType, interferencePreset, 
-                                             noiseLevel, interferenceLevel);
+            // GAME-CHANGING: Dynamic Signal Strength System (replaces old interference)
+            detectVoiceActivity(std::abs(input));
+            
+            // Update signal strength based on voice activity and phone type  
+            updateSignalStrength(std::abs(input));
+            
+            // Apply intelligent signal quality simulation
+            input = applySignalQuality(input, phoneType, static_cast<SignalQuality>(interferencePreset));
+            
+            // Apply smart compression that adapts to signal strength
+            if (compressionLevel > 0.0f)
+            {
+                input = applySmartCompression(input, currentSignalStrength);
+            }
             
             // NEW: Apply TV interference if enabled (THE FEATURE YOU'VE BEEN WAITING FOR!)
             if (tvInterferenceLevel > 0.5f)
@@ -342,20 +453,39 @@ void TestAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
                 input = applyPhoneDistortion(input, phoneType, distortionAmount);
             }
             
-            // Apply compression
-            if (compressionLevel > 0.0f)
+            // TEMPORARILY DISABLED: Too many processing layers making it sound robotic
+            /*
+            // PHASE 5: Advanced Audio Processing
+            
+            // Apply codec simulation for authentic digital compression
+            if (codecType != GSM_FullRate || packetLoss > 0.0f)
             {
-                input = applyPhoneCompression(input, phoneType, compressionLevel);
+                input = applyCodecSimulation(input, codecType, 0.8f);
             }
+            
+            // Apply packet loss and jitter
+            if (packetLoss > 0.0f)
+            {
+                input = applyPacketLoss(input, packetLoss);
+                input = applyJitter(input, packetLoss * 0.5f); // Jitter related to packet loss
+            }
+            */
             
             channelData[sample] = input;
         }
     }
+    
+    // Apply stereo positioning (affects entire buffer after processing)
+    if (callPosition != Center)
+    {
+        applyStereoPositioning(buffer, callPosition, 1.0f);
+    }
 }
 
 //==============================================================================
-// AUTHENTIC INTERFERENCE METHODS (Phase 4)
+// AUTHENTIC INTERFERENCE METHODS (REPLACED BY DYNAMIC SIGNAL STRENGTH - COMMENTED OUT)
 
+/*
 float TestAudioProcessor::applyAuthenticInterference(float input, PhoneType phoneType, int preset, float noiseLevel, float interferenceLevel)
 {
     // Apply phone-specific authentic interference based on preset
@@ -372,137 +502,99 @@ float TestAudioProcessor::applyAuthenticInterference(float input, PhoneType phon
     }
 }
 
+// OLD INTERFERENCE METHODS - COMMENTED OUT AND REPLACED BY DYNAMIC SIGNAL STRENGTH
+/*
 float TestAudioProcessor::applyNokiaInterference(float input, int preset, float noiseLevel, float interferenceLevel)
 {
-    switch (preset)
-    {
-        case Nokia_NearTV:
-            // Classic GSM buzz - 217Hz burst pattern
-            gsmBurstTimer += 1.0f / static_cast<float>(currentSampleRate);
-            if (gsmBurstTimer >= 0.0046f) // GSM burst every 4.6ms
-            {
-                gsmBurstTimer = 0.0f;
-                gsmBurstActive = random.nextFloat() > 0.7f;
-            }
-            if (gsmBurstActive)
-            {
-                gsmPhase += 2.0f * juce::MathConstants<float>::pi * 217.0f / static_cast<float>(currentSampleRate);
-                input += std::sin(gsmPhase) * 0.02f * interferenceLevel; // Much more subtle
-            }
-            break;
-            
-        case Nokia_AlarmClock:
-            // Disrupting alarm clock/radio - random digital clicks
-            if (random.nextFloat() > 0.9985f) // Much less frequent
-            {
-                input += (random.nextFloat() * 2.0f - 1.0f) * 0.03f * interferenceLevel; // Much quieter
-            }
-            break;
-            
-        case Nokia_CarRadio:
-            // In-car interference - periodic bursts
-            if (static_cast<int>(gsmPhase * 100) % 200 < 50)
-            {
-                input += (random.nextFloat() * 2.0f - 1.0f) * 0.015f * interferenceLevel; // Much more subtle
-            }
-            break;
-    }
-    
-    // Add base Nokia digital noise - much more subtle
-    if (noiseLevel > 0.0f)
-    {
-        input += (random.nextFloat() * 2.0f - 1.0f) * 0.008f * noiseLevel; // Very quiet background noise
-    }
-    
+    // OLD INTERFERENCE CODE - REPLACED BY DYNAMIC SIGNAL STRENGTH
     return input;
 }
 
 float TestAudioProcessor::applyIPhoneInterference(float input, int preset, float noiseLevel, float interferenceLevel)
 {
-    switch (preset)
-    {
-        case iPhone_NearSpeakers:
-            // Digital buzz near computer speakers - cleaner than Nokia
-            if (random.nextFloat() > 0.9992f) // Much less frequent
-            {
-                input += std::sin(gsmPhase * 2.0f) * 0.015f * interferenceLevel; // Much more subtle
-            }
-            break;
-            
-        case iPhone_Charging:
-            // Interference while charging - periodic hum (much more predictable)
-            gsmPhase += 0.005f; // Slower, more predictable phase
-            input += std::sin(gsmPhase) * 0.003f * interferenceLevel; // Much quieter hum
-            break;
-            
-        case iPhone_DataSync:
-            // During email/data transfer - digital artifacts
-            if (random.nextFloat() > 0.9995f) // Less frequent
-            {
-                input += (random.nextFloat() * 2.0f - 1.0f) * 0.02f * interferenceLevel; // Much quieter
-            }
-            break;
-    }
-    
-    // Add base iPhone clean digital noise - very subtle
-    if (noiseLevel > 0.0f)
-    {
-        input += (random.nextFloat() * 2.0f - 1.0f) * 0.005f * noiseLevel; // Extremely quiet
-    }
-    
+    // OLD INTERFERENCE CODE - REPLACED BY DYNAMIC SIGNAL STRENGTH
     return input;
 }
 
 float TestAudioProcessor::applySonyEricssonInterference(float input, int preset, float noiseLevel, float interferenceLevel)
 {
-    switch (preset)
-    {
-        case Sony_Underground:
-            // Signal cutting out in tube/basement - periodic dropouts
-            if (random.nextFloat() > 0.995f) // Less frequent
-            {
-                return input * (0.7f + random.nextFloat() * 0.2f); // Less dramatic fade
-            }
-            break;
-            
-        case Sony_WindNoise:
-            // Background noise pickup in car - wind/road noise
-            hissPhase += 0.1f + random.nextFloat() * 0.05f;
-            input += std::sin(hissPhase) * (random.nextFloat() * 2.0f - 1.0f) * 0.02f * interferenceLevel; // Much quieter
-            break;
-            
-        case Sony_FlipStatic:
-            // Flip phone opening/closing static - crackle bursts
-            if (random.nextFloat() > 0.9998f) // Much less frequent
-            {
-                input += (random.nextFloat() * 2.0f - 1.0f) * 0.05f * interferenceLevel; // Much quieter
-            }
-            break;
-    }
-    
-    // Add base Sony Ericsson analog hiss - very subtle
-    if (noiseLevel > 0.0f)
-    {
-        hissPhase += 0.08f;
-        input += std::sin(hissPhase) * (random.nextFloat() * 2.0f - 1.0f) * 0.012f * noiseLevel; // Much quieter
-    }
-    
+    // OLD INTERFERENCE CODE - REPLACED BY DYNAMIC SIGNAL STRENGTH
     return input;
 }
+*/
 
 float TestAudioProcessor::applyPhoneDistortion(float input, PhoneType phoneType, float amount)
 {
     switch (phoneType)
     {
         case Nokia:
-            // Nokia digital clipping
-            return juce::jlimit(-amount, amount, input * (1.0f + amount * 2.0f));
+        {
+            // Nokia: MUCH GENTLER digital characteristics (less buzzy!)
+            float gain = 1.0f + amount * 1.2f; // FIXED: Less aggressive gain (was 2.5f)
+            float amplified = input * gain;
+            
+            // Softer digital clipping (less harsh)
+            float clipped = juce::jlimit(-0.9f, 0.9f, amplified); // FIXED: Softer clipping ceiling
+            
+            // MUCH LESS quantization noise (was too buzzy!)
+            if (amount > 0.3f) // FIXED: Only add at higher settings
+            {
+                float quantizationNoise = (random.nextFloat() * 2.0f - 1.0f) * 0.001f * amount; // FIXED: Much quieter
+                clipped += quantizationNoise;
+            }
+            
+            // MUCH SUBTLER digital artifacts
+            float digitalBite = std::sin(clipped * 8.0f) * 0.02f * amount; // FIXED: Much gentler (was 15.0f freq, 0.08f level)
+            
+            return clipped + digitalBite;
+        }
+        
         case iPhone:
-            // iPhone soft limiting
-            return std::tanh(input * (1.0f + amount * 1.5f)) * 0.8f;
+        {
+            // iPhone: Smooth soft saturation with high-quality digital processing
+            float gain = 1.0f + amount * 1.8f;
+            float amplified = input * gain;
+            
+            // Smooth soft clipping (high-quality DAC with oversampling)
+            float softClipped = std::tanh(amplified) * 0.85f;
+            
+            // Add subtle digital warmth (high-quality processing artifacts)
+            if (amount > 0.05f)
+            {
+                float digitalWarmth = std::sin(softClipped * 8.0f) * 0.02f * amount;
+                softClipped += digitalWarmth;
+            }
+            
+            // Very subtle high-frequency roll-off (anti-aliasing filtering)
+            return softClipped * (1.0f - amount * 0.1f);
+        }
+        
         case SonyEricsson:
-            // Sony analog saturation
-            return std::atan(input * (1.0f + amount * 3.0f)) * 0.7f;
+        {
+            // Sony Ericsson: Analog tube-like warmth with vintage character
+            float gain = 1.0f + amount * 3.5f;
+            float amplified = input * gain;
+            
+            // Asymmetric analog saturation (vintage op-amp characteristics)
+            float analogSat;
+            if (amplified >= 0.0f)
+            {
+                analogSat = std::atan(amplified * 1.2f) * 0.8f; // Positive saturation
+            }
+            else
+            {
+                analogSat = std::atan(amplified * 0.9f) * 0.85f; // Slightly different negative saturation
+            }
+            
+            // Add analog harmonic content (tube-like even harmonics)
+            float analogHarmonics = std::sin(analogSat * 6.0f) * 0.12f * amount;
+            
+            // Vintage component aging (slight frequency-dependent distortion)
+            float agingEffect = analogSat * (1.0f + std::sin(analogSat * 25.0f) * 0.05f * amount);
+            
+            return agingEffect + analogHarmonics;
+        }
+        
         default:
             return input;
     }
@@ -603,36 +695,45 @@ void TestAudioProcessor::loadPhonePreset(PhoneType phoneType)
     switch (phoneType)
     {
         case Nokia:
+            // Nokia 3310 - Classic GSM characteristics
             apvts.getParameter(LOW_CUT_ID)->setValueNotifyingHost(
                 apvts.getParameter(LOW_CUT_ID)->convertTo0to1(400.0f));
             apvts.getParameter(HIGH_CUT_ID)->setValueNotifyingHost(
                 apvts.getParameter(HIGH_CUT_ID)->convertTo0to1(4000.0f));
-            apvts.getParameter(DISTORTION_ID)->setValueNotifyingHost(0.0f);
-            apvts.getParameter(NOISE_LEVEL_ID)->setValueNotifyingHost(0.05f); // Much lower
-            apvts.getParameter(INTERFERENCE_ID)->setValueNotifyingHost(0.1f); // Much lower
-            apvts.getParameter(COMPRESSION_ID)->setValueNotifyingHost(0.3f); // Lower
+                
+            // Set target values for smooth parameter transitions
+            targetDistortion = 0.2f;    // 20% - Small speaker distortion
+            targetNoise = 0.08f;        // 8% - GSM codec noise
+            targetInterference = 0.15f; // 15% - GSM RF interference  
+            targetCompression = 0.5f;   // 50% - Heavy GSM compression
             break;
             
         case iPhone:
+            // iPhone - Modern smartphone with clean digital processing
             apvts.getParameter(LOW_CUT_ID)->setValueNotifyingHost(
                 apvts.getParameter(LOW_CUT_ID)->convertTo0to1(300.0f));
             apvts.getParameter(HIGH_CUT_ID)->setValueNotifyingHost(
                 apvts.getParameter(HIGH_CUT_ID)->convertTo0to1(8000.0f));
-            apvts.getParameter(DISTORTION_ID)->setValueNotifyingHost(0.0f);
-            apvts.getParameter(NOISE_LEVEL_ID)->setValueNotifyingHost(0.02f); // Much lower
-            apvts.getParameter(INTERFERENCE_ID)->setValueNotifyingHost(0.05f); // Much lower
-            apvts.getParameter(COMPRESSION_ID)->setValueNotifyingHost(0.15f); // Lower
+                
+            // Set target values for smooth parameter transitions
+            targetDistortion = 0.05f;   // 5% - Minimal digital distortion
+            targetNoise = 0.03f;        // 3% - Advanced noise cancellation
+            targetInterference = 0.04f; // 4% - Digital shielding
+            targetCompression = 0.2f;   // 20% - Modern codec compression
             break;
             
         case SonyEricsson:
+            // Sony Ericsson - Vintage flip phone with analog circuits
             apvts.getParameter(LOW_CUT_ID)->setValueNotifyingHost(
                 apvts.getParameter(LOW_CUT_ID)->convertTo0to1(250.0f));
             apvts.getParameter(HIGH_CUT_ID)->setValueNotifyingHost(
                 apvts.getParameter(HIGH_CUT_ID)->convertTo0to1(2500.0f));
-            apvts.getParameter(DISTORTION_ID)->setValueNotifyingHost(0.1f); // Lower
-            apvts.getParameter(NOISE_LEVEL_ID)->setValueNotifyingHost(0.08f); // Much lower
-            apvts.getParameter(INTERFERENCE_ID)->setValueNotifyingHost(0.12f); // Much lower
-            apvts.getParameter(COMPRESSION_ID)->setValueNotifyingHost(0.4f); // Lower
+                
+            // Set target values for smooth parameter transitions
+            targetDistortion = 0.35f;   // 35% - Tiny speaker, analog circuits
+            targetNoise = 0.12f;        // 12% - Poor electrical shielding
+            targetInterference = 0.18f; // 18% - Very susceptible to RF
+            targetCompression = 0.6f;   // 60% - Aggressive analog compression
             break;
     }
     
@@ -776,6 +877,575 @@ float TestAudioProcessor::generateSonyTVInterference(float input, float intensit
     }
     
     return input + analogInterference;
+}
+
+//==============================================================================
+// PHASE 5: ADVANCED AUDIO PROCESSING METHODS
+
+// Codec Simulation Methods
+float TestAudioProcessor::applyCodecSimulation(float input, CodecType codec, float intensity)
+{
+    switch (codec)
+    {
+        case GSM_FullRate:
+            return applyGSMCodec(input, false, intensity);
+        case GSM_HalfRate:
+            return applyGSMCodec(input, true, intensity);
+        case CDMA_QCELP:
+            return applyCDMACodec(input, intensity);
+        case AMR_4_75:
+            return applyAMRCodec(input, 4.75f, intensity);
+        case AMR_12_2:
+            return applyAMRCodec(input, 12.2f, intensity);
+        case Early_VoIP:
+            return applyVoIPArtifacts(input, intensity);
+        case Digital_Artifact:
+            return applyVoIPArtifacts(input, intensity * 1.5f); // More extreme
+        default:
+            return input;
+    }
+}
+
+float TestAudioProcessor::applyGSMCodec(float input, bool halfRate, float intensity)
+{
+    // GSM codec simulation: aggressive quantization and temporal artifacts
+    
+    // Quantization (8-bit to 13-bit depending on rate)
+    int quantLevels = halfRate ? 256 : 8192; // Half-rate = 8-bit, Full-rate = 13-bit
+    float quantized = std::round(input * quantLevels) / quantLevels;
+    
+    // Buffer for codec delay and artifacts
+    codecBuffer[codecBufferIndex] = quantized;
+    codecBufferIndex = (codecBufferIndex + 1) % 8;
+    
+    // GSM frame artifacts (20ms frames)
+    codecPhase += 1.0f / static_cast<float>(currentSampleRate);
+    if (codecPhase >= 0.02f) // 20ms frame
+    {
+        codecPhase = 0.0f;
+        quantizationNoise = (random.nextFloat() * 2.0f - 1.0f) * 0.02f;
+    }
+    
+    // Apply quantization noise and codec delay
+    float delayed = codecBuffer[(codecBufferIndex + 4) % 8]; // 4-sample delay
+    return juce::jlimit(-1.0f, 1.0f, delayed + quantizationNoise * intensity);
+}
+
+float TestAudioProcessor::applyCDMACodec(float input, float intensity)  
+{
+    // CDMA QCELP codec: variable rate with silence detection
+    
+    // Simulate voice activity detection
+    float threshold = 0.05f;
+    bool voiceActive = std::abs(input) > threshold;
+    
+    if (!voiceActive)
+    {
+        // Comfort noise generation during silence
+        return (random.nextFloat() * 2.0f - 1.0f) * 0.01f * intensity;
+    }
+    
+    // QCELP quantization (more aggressive than GSM)
+    int quantLevels = 512; // 9-bit equivalent
+    float quantized = std::round(input * quantLevels) / quantLevels;
+    
+    // Add CDMA-specific digital artifacts
+    codecPhase += 2.0f * juce::MathConstants<float>::pi * 8000.0f / static_cast<float>(currentSampleRate);
+    float digitalNoise = std::sin(codecPhase) * 0.01f * intensity;
+    
+    return juce::jlimit(-1.0f, 1.0f, quantized + digitalNoise);
+}
+
+float TestAudioProcessor::applyAMRCodec(float input, float bitrate, float intensity)
+{
+    // AMR codec simulation based on bitrate
+    
+    // Lower bitrate = more aggressive compression
+    float compressionFactor = 12.2f / bitrate; // Scale based on max AMR rate
+    
+    // Quantization levels based on bitrate
+    int quantLevels = static_cast<int>(8192 / compressionFactor);
+    float quantized = std::round(input * quantLevels) / quantLevels;
+    
+    // AMR artifacts: spectral shaping and noise
+    codecPhase += 0.1f;
+    float spectralNoise = std::sin(codecPhase * 2.3f) * 0.005f * compressionFactor * intensity;
+    
+    // Frame-based artifacts (20ms AMR frames)
+    if (static_cast<int>(codecPhase * 50) % 40 == 0) // Every 20ms at 50Hz update
+    {
+        quantizationNoise = (random.nextFloat() * 2.0f - 1.0f) * 0.01f * compressionFactor;
+    }
+    
+    return juce::jlimit(-1.0f, 1.0f, quantized + spectralNoise + quantizationNoise * intensity);
+}
+
+float TestAudioProcessor::applyVoIPArtifacts(float input, float intensity)
+{
+    // Early VoIP artifacts: packet reconstruction, echo cancellation artifacts
+    
+    // Simulate packet reconstruction errors
+    if (random.nextFloat() > 0.995f)
+    {
+        // Packet reconstruction glitch
+        return reconstructionBuffer[reconstructionIndex] * 0.7f;
+    }
+    
+    // Store in reconstruction buffer
+    reconstructionBuffer[reconstructionIndex] = input;
+    reconstructionIndex = (reconstructionIndex + 1) % 16;
+    
+    // Echo cancellation artifacts
+    float echoArtifact = reconstructionBuffer[(reconstructionIndex + 8) % 16] * 0.05f;
+    
+    // Internet jitter simulation
+    codecPhase += (1.0f + random.nextFloat() * 0.2f) / static_cast<float>(currentSampleRate);
+    float jitterNoise = std::sin(codecPhase * 4000.0f) * 0.02f * intensity;
+    
+    return juce::jlimit(-1.0f, 1.0f, input + echoArtifact + jitterNoise);
+}
+
+// Packet Loss and Jitter Methods
+float TestAudioProcessor::applyPacketLoss(float input, float lossAmount)
+{
+    // Simulate packet loss with realistic reconstruction
+    
+    packetLossTimer += 1.0f / static_cast<float>(currentSampleRate);
+    
+    // Packet loss probability based on lossAmount
+    if (packetLossTimer >= 0.02f) // Check every 20ms (packet boundary)
+    {
+        packetLossTimer = 0.0f;
+        packetDropped = random.nextFloat() < lossAmount;
+    }
+    
+    if (packetDropped)
+    {
+        // Simulate packet reconstruction: linear interpolation or repetition
+        float lastGood = reconstructionBuffer[(reconstructionIndex + 15) % 16];
+        float nextEstimate = lastGood * 0.8f; // Decay estimate
+        
+        return nextEstimate;
+    }
+    
+    // Store good packet
+    reconstructionBuffer[reconstructionIndex] = input;
+    reconstructionIndex = (reconstructionIndex + 1) % 16;
+    
+    return input;
+}
+
+float TestAudioProcessor::applyJitter(float input, float jitterAmount)
+{
+    // Simulate network jitter with variable delay
+    
+    // Update jitter phase for modulation
+    jitterPhase += 2.0f * juce::MathConstants<float>::pi * 0.5f / static_cast<float>(currentSampleRate);
+    
+    // Calculate variable delay (0-63 samples based on jitter amount)
+    int maxDelay = static_cast<int>(jitterAmount * 63.0f);
+    int currentDelay = static_cast<int>((std::sin(jitterPhase) + 1.0f) * 0.5f * maxDelay);
+    
+    // Store input in delay line
+    jitterDelay[jitterWriteIndex] = input;
+    jitterWriteIndex = (jitterWriteIndex + 1) % 64;
+    
+    // Read from delayed position
+    int readIndex = (jitterWriteIndex - currentDelay - 1 + 64) % 64;
+    
+    return jitterDelay[readIndex];
+}
+
+// Stereo Positioning Methods
+void TestAudioProcessor::applyStereoPositioning(juce::AudioBuffer<float>& buffer, CallPosition position, float intensity)
+{
+    if (buffer.getNumChannels() < 2) return; // Skip if not stereo
+    
+    auto* leftChannel = buffer.getWritePointer(0);
+    auto* rightChannel = buffer.getWritePointer(1);
+    
+    for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+    {
+        float left = leftChannel[sample];
+        float right = rightChannel[sample];
+        float mono = (left + right) * 0.5f;
+        
+        switch (position)
+        {
+            case LeftEar:
+                // Phone held to left ear
+                leftChannel[sample] = mono;
+                rightChannel[sample] = mono * 0.2f; // Slight bleed to right
+                break;
+                
+            case RightEar:
+                // Phone held to right ear  
+                rightChannel[sample] = mono;
+                leftChannel[sample] = mono * 0.2f; // Slight bleed to left
+                break;
+                
+            case Speaker_Near:
+                // Speakerphone close - slight stereo widening
+                leftChannel[sample] = left * 1.1f - right * 0.1f;
+                rightChannel[sample] = right * 1.1f - left * 0.1f;
+                break;
+                
+            case Speaker_Far:
+                // Speakerphone distant - more ambient
+                leftChannel[sample] = mono * 0.8f + left * 0.4f;
+                rightChannel[sample] = mono * 0.8f + right * 0.4f;
+                break;
+                
+            case Bluetooth_Left:
+                // Bluetooth earpiece left
+                leftChannel[sample] = mono * 0.9f;
+                rightChannel[sample] = mono * 0.1f;
+                break;
+                
+            case Bluetooth_Right:
+                // Bluetooth earpiece right
+                rightChannel[sample] = mono * 0.9f;
+                leftChannel[sample] = mono * 0.1f;
+                break;
+                
+            default: // Center
+                break;
+        }
+    }
+}
+
+// Background Ambience Methods  
+void TestAudioProcessor::generateBackgroundAmbience(juce::AudioBuffer<float>& buffer, AmbienceType type, float level)
+{
+    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+    {
+        auto* channelData = buffer.getWritePointer(channel);
+        
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        {
+            float ambience = 0.0f;
+            
+            switch (type)
+            {
+                case Cafe_Busy:
+                    // Busy café: chatter, dishes, coffee machine
+                    ambiencePhase[0] += 0.01f + ambienceRandom.nextFloat() * 0.02f; // Chatter
+                    ambiencePhase[1] += 0.003f; // Low rumble
+                    ambience = std::sin(ambiencePhase[0]) * 0.3f + 
+                              std::sin(ambiencePhase[1]) * 0.1f +
+                              (ambienceRandom.nextFloat() * 2.0f - 1.0f) * 0.1f; // Random noise
+                    break;
+                    
+                case Car_Highway:
+                    // Car on highway: engine, wind, road noise
+                    ambiencePhase[0] += 0.008f; // Engine rumble
+                    ambiencePhase[1] += 0.15f;  // Wind noise
+                    ambience = std::sin(ambiencePhase[0]) * 0.4f +
+                              std::sin(ambiencePhase[1]) * (ambienceRandom.nextFloat() * 0.2f + 0.1f);
+                    break;
+                    
+                case Street_Traffic:
+                    // City street: cars, horns, general urban noise
+                    ambiencePhase[0] += 0.005f + ambienceRandom.nextFloat() * 0.01f;
+                    if (ambienceRandom.nextFloat() > 0.998f) // Occasional car horn
+                    {
+                        ambienceLevel[0] = 0.5f;
+                    }
+                    ambienceLevel[0] *= 0.95f; // Decay
+                    ambience = std::sin(ambiencePhase[0]) * 0.2f + ambienceLevel[0];
+                    break;
+                    
+                case Underground_Tube:
+                    // London Underground: train rumble, announcements, echoes
+                    ambiencePhase[0] += 0.003f; // Deep rumble
+                    ambiencePhase[1] += 0.02f;  // Electrical hum
+                    ambience = std::sin(ambiencePhase[0]) * 0.5f +
+                              std::sin(ambiencePhase[1]) * 0.1f +
+                              (ambienceRandom.nextFloat() * 2.0f - 1.0f) * 0.05f;
+                    break;
+                    
+                case Office_Quiet:
+                    // Quiet office: air conditioning, keyboards, quiet conversations
+                    ambiencePhase[0] += 0.001f; // AC hum
+                    if (ambienceRandom.nextFloat() > 0.995f) // Occasional keyboard
+                    {
+                        ambienceLevel[1] = 0.1f;
+                    }
+                    ambienceLevel[1] *= 0.8f; // Quick decay
+                    ambience = std::sin(ambiencePhase[0]) * 0.05f + ambienceLevel[1];
+                    break;
+                    
+                case Train_Interior:
+                {
+                    // Inside moving train: rhythmic clacking, gentle swaying
+                    ambiencePhase[0] += 0.02f;  // Track rhythm
+                    ambiencePhase[1] += 0.004f; // Train rumble
+                    float trackRhythm = std::sin(ambiencePhase[0]) > 0.8f ? 0.2f : 0.0f;
+                    ambience = trackRhythm + std::sin(ambiencePhase[1]) * 0.3f;
+                    break;
+                }
+                    
+                case Airport_Terminal:
+                    // Airport background: announcements, people, air conditioning
+                    ambiencePhase[0] += 0.002f; // AC system
+                    ambiencePhase[1] += 0.01f + ambienceRandom.nextFloat() * 0.02f; // People
+                    if (ambienceRandom.nextFloat() > 0.9995f) // Rare announcement
+                    {
+                        ambienceLevel[2] = 0.3f;
+                    }
+                    ambienceLevel[2] *= 0.98f; // Slow decay
+                    ambience = std::sin(ambiencePhase[0]) * 0.1f +
+                              std::sin(ambiencePhase[1]) * 0.2f + ambienceLevel[2];
+                    break;
+                    
+                default: // Silent
+                    ambience = 0.0f;
+                    break;
+            }
+            
+            // Mix ambience with existing audio
+            channelData[sample] += ambience * level * 0.15f; // Keep ambience subtle
+        }
+    }
+}
+
+//==============================================================================
+// Frequency conversion functions for discrete choice parameters
+
+float TestAudioProcessor::getLowCutFrequency(int choiceIndex) const
+{
+    switch (choiceIndex)
+    {
+        case 0: return 0.0f;    // Off - return 0 to indicate no filtering
+        case 1: return 180.0f;  // 180Hz
+        case 2: return 250.0f;  // 250Hz
+        case 3: return 300.0f;  // 300Hz
+        case 4: return 400.0f;  // 400Hz
+        default: return 0.0f;   // Default to Off
+    }
+}
+
+float TestAudioProcessor::getHighCutFrequency(int choiceIndex) const
+{
+    switch (choiceIndex)
+    {
+        case 0: return 0.0f;     // Off - return 0 to indicate no filtering
+        case 1: return 2800.0f;  // 2.8kHz
+        case 2: return 3200.0f;  // 3.2kHz
+        case 3: return 3400.0f;  // 3.4kHz
+        case 4: return 7000.0f;  // 7kHz
+        default: return 0.0f;    // Default to Off
+    }
+}
+
+//==============================================================================
+// Parameter smoothing for professional transitions
+
+void TestAudioProcessor::updateParameterSmoothing()
+{
+    // Smooth parameter transitions for professional feel
+    currentDistortion += (targetDistortion - currentDistortion) * smoothingSpeed;
+    currentNoise += (targetNoise - currentNoise) * smoothingSpeed;
+    currentInterference += (targetInterference - currentInterference) * smoothingSpeed;
+    currentCompression += (targetCompression - currentCompression) * smoothingSpeed;
+    
+    // Apply smoothed values to actual parameters (with slight delay to avoid clicks)
+    if (std::abs(targetDistortion - currentDistortion) < 0.001f)
+        apvts.getParameter(DISTORTION_ID)->setValueNotifyingHost(targetDistortion);
+    if (std::abs(targetNoise - currentNoise) < 0.001f)  
+        apvts.getParameter(NOISE_LEVEL_ID)->setValueNotifyingHost(targetNoise);
+    if (std::abs(targetInterference - currentInterference) < 0.001f)
+        apvts.getParameter(INTERFERENCE_ID)->setValueNotifyingHost(targetInterference);
+    if (std::abs(targetCompression - currentCompression) < 0.001f)
+        apvts.getParameter(COMPRESSION_ID)->setValueNotifyingHost(targetCompression);
+}
+
+//==============================================================================
+// GAME-CHANGING: Dynamic Signal Strength System (replaces interference)
+
+void TestAudioProcessor::detectVoiceActivity(float inputLevel)
+{
+    // Smooth voice activity detection
+    float targetActivity = (inputLevel > 0.01f) ? inputLevel : 0.0f;
+    voiceActivityLevel += (targetActivity - voiceActivityLevel) * voiceActivitySmoothing;
+    
+    // Update silence timer
+    if (voiceActivityLevel > 0.05f)
+    {
+        silenceTimer = 0.0f; // Reset silence timer when voice detected
+    }
+    else
+    {
+        silenceTimer += 1.0f / static_cast<float>(currentSampleRate);
+    }
+}
+
+void TestAudioProcessor::updateSignalStrength(float inputLevel)
+{
+    // Update signal change timer
+    signalChangeTimer += 1.0f / static_cast<float>(currentSampleRate);
+    
+    // INTELLIGENT: Signal degrades during silence (realistic!) - BUT MORE STABLE
+    if (silenceTimer > silenceThreshold)
+    {
+        // Signal degrades when quiet (like real phones!) - MUCH MORE GRADUAL  
+        targetSignalStrength = 0.6f + random.nextFloat() * 0.3f; // FIXED: 60-90% strength (was 30-70%)
+    }
+    else if (voiceActivityLevel > 0.1f)
+    {
+        // Signal improves when talking (realistic behavior!) - STABLE
+        targetSignalStrength = 0.8f + random.nextFloat() * 0.2f; // FIXED: 80-100% strength (was 70-100%)
+    }
+    
+    // MUCH LESS FREQUENT signal variations (every 5-10 seconds instead of 2-5)
+    if (signalChangeTimer > (5.0f + random.nextFloat() * 5.0f)) // FIXED: Much more stable
+    {
+        signalChangeTimer = 0.0f;
+        
+        // Phone-specific signal behavior - MORE STABLE
+        switch (static_cast<PhoneType>(static_cast<int>(phoneTypeParam->load())))
+        {
+            case Nokia:
+                // Nokia: Very stable signal, rare drops
+                targetSignalStrength = 0.8f + random.nextFloat() * 0.2f; // FIXED: Much more stable (was 0.6-1.0)
+                if (random.nextFloat() > 0.98f) targetSignalStrength = 0.6f; // FIXED: Much rarer dropouts
+                break;
+                
+            case iPhone:
+                // iPhone: Excellent signal, very stable
+                targetSignalStrength = 0.9f + random.nextFloat() * 0.1f; // FIXED: Very stable (was 0.8-1.0)
+                break;
+                
+            case SonyEricsson:
+                // Sony: Slightly more variable but still reasonable
+                targetSignalStrength = 0.7f + random.nextFloat() * 0.3f; // FIXED: More stable (was 0.4-1.0)
+                break;
+        }
+    }
+    
+    // MUCH SMOOTHER signal strength transitions 
+    signalSmoothingSpeed = 0.005f; // FIXED: Even smoother (was 0.01f)
+    currentSignalStrength += (targetSignalStrength - currentSignalStrength) * signalSmoothingSpeed;
+    currentSignalStrength = juce::jlimit(0.0f, 1.0f, currentSignalStrength);
+    
+    // Update signal bars for GUI (1-5 bars)
+    signalBars = static_cast<int>(currentSignalStrength * 4.0f) + 1;
+    signalBars = juce::jlimit(1, 5, signalBars);
+}
+
+float TestAudioProcessor::applySignalQuality(float input, PhoneType phoneType, SignalQuality quality)
+{
+    float effectiveSignalStrength = currentSignalStrength;
+    
+    // Override signal strength based on quality setting
+    switch (quality)
+    {
+        case Perfect_Signal:
+            effectiveSignalStrength = 1.0f;
+            break;
+        case Good_Signal:
+            effectiveSignalStrength = 0.9f;  // FIXED: More forgiving
+            break;
+        case Fair_Signal:
+            effectiveSignalStrength = 0.75f; // FIXED: Less harsh
+            break;
+        case Poor_Signal:
+            effectiveSignalStrength = 0.6f;  // FIXED: Still usable
+            break;
+        case Breaking_Up:
+            effectiveSignalStrength = 0.4f;  // FIXED: Less extreme
+            break;
+        case Auto_Dynamic:
+            // Use intelligent signal strength (no override)
+            break;
+    }
+    
+    // Simulate call dynamics (dropouts, recovery)
+    simulateCallDynamics();
+    
+    // Apply signal-based effects - MUCH MORE SUBTLE
+    float processedInput = input;
+    
+    // Signal dropouts (breaking up) - LESS AGGRESSIVE
+    if (isInDropout || effectiveSignalStrength < 0.4f)
+    {
+        // Gentle signal loss - less jarring
+        if (random.nextFloat() > (effectiveSignalStrength + 0.5f)) // FIXED: Much less frequent
+        {
+            processedInput *= 0.3f; // FIXED: Less extreme (was 0.1f)
+        }
+        
+        // Very subtle crackling - MUCH LESS FREQUENT
+        if (random.nextFloat() > 0.998f) // FIXED: Only 0.2% chance (was 5%)
+        {
+            processedInput += (random.nextFloat() * 2.0f - 1.0f) * 0.02f; // FIXED: Much quieter
+        }
+    }
+    
+    // Signal-dependent compression and distortion - VERY SUBTLE
+    if (effectiveSignalStrength < 0.8f) // FIXED: Only apply when signal is quite poor
+    {
+        // Very gentle compression - like real phones
+        processedInput = applySmartCompression(processedInput, effectiveSignalStrength);
+        
+        // Minimal background noise - MUCH CLEANER
+        float noiseLevel = (1.0f - effectiveSignalStrength) * 0.015f; // FIXED: Much less noise (was 0.08f)
+        processedInput += (random.nextFloat() * 2.0f - 1.0f) * noiseLevel;
+    }
+    
+    return processedInput;
+}
+
+void TestAudioProcessor::simulateCallDynamics()
+{
+    callQualityTimer += 1.0f / static_cast<float>(currentSampleRate);
+    
+    // Handle current dropout
+    if (isInDropout)
+    {
+        dropoutRecoveryTimer += 1.0f / static_cast<float>(currentSampleRate);
+        
+        if (dropoutRecoveryTimer >= dropoutDuration)
+        {
+            // Recovery from dropout
+            isInDropout = false;
+            dropoutRecoveryTimer = 0.0f;
+            targetSignalStrength = 0.7f + random.nextFloat() * 0.3f; // Signal recovers
+        }
+    }
+    else
+    {
+        // Check for new dropout events (more likely with poor signal)
+        float dropoutProbability = (1.0f - currentSignalStrength) * 0.0002f; // Very low base probability
+        
+        if (random.nextFloat() < dropoutProbability)
+        {
+            // Start a dropout
+            isInDropout = true;
+            dropoutDuration = 0.5f + random.nextFloat() * 2.0f; // 0.5-2.5 seconds
+            dropoutRecoveryTimer = 0.0f;
+            targetSignalStrength = 0.1f; // Signal drops dramatically
+        }
+    }
+}
+
+float TestAudioProcessor::applySmartCompression(float input, float signalStrength)
+{
+    // MUCH GENTLER compression - like real phone calls (not aggressive studio compression!)
+    float compressionIntensity = (1.0f - signalStrength) * 0.3f; // FIXED: Much less intense (was 0.8f)
+    float threshold = 0.5f - (compressionIntensity * 0.1f);       // FIXED: Higher threshold, less compression
+    float ratio = 1.5f + (compressionIntensity * 2.0f);          // FIXED: Gentle ratios 1.5:1 to 3.5:1 (was 2:1 to 10:1!)
+    
+    float absInput = std::abs(input);
+    if (absInput > threshold)
+    {
+        float excess = absInput - threshold;
+        float compressedExcess = excess / ratio;
+        float sign = (input >= 0.0f) ? 1.0f : -1.0f;
+        return sign * (threshold + compressedExcess);
+    }
+    
+    return input;
 }
 
 //==============================================================================

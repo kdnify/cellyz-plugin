@@ -9,8 +9,8 @@ const juce::Colour TestAudioProcessorEditor::SONY_ORANGE = juce::Colour(0xffff66
 //==============================================================================
 // Phone display definitions (small display area within fixed window)
 const TestAudioProcessorEditor::PhoneDisplay TestAudioProcessorEditor::phoneDisplays[3] = {
-    // Nokia 3310 - Classic chunky phone
-    { "Nokia 3310", juce::Rectangle<int>(), NOKIA_BLUE, juce::Colour(0xff9acd32), NOKIA_BLUE, 0.65f, 8, false, false, "Nokia 3310" },
+    // RetroCell 3300 - Classic chunky phone (Nokia-inspired)
+{ "RetroCell 3300", juce::Rectangle<int>(), NOKIA_BLUE, juce::Colour(0xff9acd32), NOKIA_BLUE, 0.65f, 8, false, false, "RetroCell 3300" },
     
     // iPhone - Modern slim phone  
     { "iPhone", juce::Rectangle<int>(), IPHONE_GREY, juce::Colour(0xff000000), IPHONE_GREY, 0.50f, 20, true, false, "iPhone" },
@@ -44,34 +44,50 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     addAndMakeVisible(currentPhoneLabel);
     
     // Configure phone preset buttons (fixed at bottom)
-    nokiaButton.setButtonText("📱 Nokia");
+    nokiaButton.setButtonText("RetroCell");
     nokiaButton.setColour(juce::TextButton::buttonColourId, phoneDisplays[0].bodyColor);
     nokiaButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
     nokiaButton.addListener(this);
     addAndMakeVisible(nokiaButton);
     
-    iphoneButton.setButtonText("📱 iPhone");
+    iphoneButton.setButtonText("TouchPro");
     iphoneButton.setColour(juce::TextButton::buttonColourId, phoneDisplays[1].bodyColor);
     iphoneButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
     iphoneButton.addListener(this);
     addAndMakeVisible(iphoneButton);
     
-    sonyButton.setButtonText("📱 Sony");
+    sonyButton.setButtonText("FlipClassic");
     sonyButton.setColour(juce::TextButton::buttonColourId, phoneDisplays[2].bodyColor);
     sonyButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
     sonyButton.addListener(this);
     addAndMakeVisible(sonyButton);
     
-    // Configure parameter sliders (positioned around phone display)
-    // These are now DAW-automatable via SliderAttachment!
-    lowCutSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    lowCutSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 20);
+    // Configure parameter controls as horizontal sliders with preset Hz markings
+    // Low Cut slider - horizontal with Hz values
+    lowCutSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    lowCutSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 100, 30); // Bigger text box for Hz display
+    lowCutSlider.setRange(0.0, 4.0, 1.0); // 5 positions: 0=Off, 1=180Hz, 2=250Hz, 3=300Hz, 4=400Hz
+    lowCutSlider.setValue(0.0); // Start at "Off"
+    // Configure for discrete snapping with good responsiveness
+    lowCutSlider.setVelocityBasedMode(false); // Disable smooth velocity dragging
+    lowCutSlider.setMouseDragSensitivity(50); // More sensitive for easier discrete movement
+    lowCutSlider.setSkewFactor(1.0); // Linear response
+    lowCutSlider.setDoubleClickReturnValue(true, 0.0); // Double-click returns to "Off"
     addAndMakeVisible(lowCutSlider);
     
-    highCutSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    highCutSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 20);
+    // High Cut slider - horizontal with Hz values  
+    highCutSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    highCutSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 100, 30);
+    highCutSlider.setRange(0.0, 4.0, 1.0); // 5 positions: 0=Off, 1=2.8kHz, 2=3.2kHz, 3=3.4kHz, 4=7kHz
+    highCutSlider.setValue(0.0); // Start at "Off"
+    // Configure for discrete snapping with good responsiveness
+    highCutSlider.setVelocityBasedMode(false); // Disable smooth velocity dragging
+    highCutSlider.setMouseDragSensitivity(50); // More sensitive for easier discrete movement
+    highCutSlider.setSkewFactor(1.0); // Linear response
+    highCutSlider.setDoubleClickReturnValue(true, 0.0); // Double-click returns to "Off"
     addAndMakeVisible(highCutSlider);
     
+    // Main Effects: Full rotary knobs for precise control
     distortionSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     distortionSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 20);
     addAndMakeVisible(distortionSlider);
@@ -80,16 +96,22 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     noiseLevelSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 20);
     addAndMakeVisible(noiseLevelSlider);
     
-    interferenceSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    interferenceSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 20);
-    addAndMakeVisible(interferenceSlider);
+    // GAME-CHANGING: Signal Quality ComboBox (replaces interference slider)
+    signalQualityBox.addItem("Perfect (5 bars)", 1);
+    signalQualityBox.addItem("Good (4 bars)", 2);
+    signalQualityBox.addItem("Fair (3 bars)", 3);
+    signalQualityBox.addItem("Poor (2 bars)", 4);
+    signalQualityBox.addItem("Breaking Up (1 bar)", 5);
+    signalQualityBox.addItem("Auto Dynamic", 6);
+    signalQualityBox.setSelectedId(6); // Default to Auto Dynamic
+    addAndMakeVisible(signalQualityBox);
     
     compressionSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     compressionSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 20);
     addAndMakeVisible(compressionSlider);
     
     // NEW: Red interference error button
-    interferenceButton.setButtonText("⚠️");
+    interferenceButton.setButtonText("TV");
     interferenceButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff8b0000)); // Dark red
     interferenceButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xffff0000)); // Bright red when pressed
     interferenceButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
@@ -107,8 +129,9 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
         audioProcessor.apvts, TestAudioProcessor::DISTORTION_ID, distortionSlider);
     noiseLevelAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         audioProcessor.apvts, TestAudioProcessor::NOISE_LEVEL_ID, noiseLevelSlider);
-    interferenceAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        audioProcessor.apvts, TestAudioProcessor::INTERFERENCE_ID, interferenceSlider);
+    // GAME-CHANGING: Signal Quality ComboBox Attachment  
+    signalQualityAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        audioProcessor.apvts, TestAudioProcessor::INTERFERENCE_PRESET_ID, signalQualityBox);
     compressionAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         audioProcessor.apvts, TestAudioProcessor::COMPRESSION_ID, compressionSlider);
     
@@ -141,11 +164,26 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     noiseLevelLabel.setFont(juce::Font(12.0f));
     addAndMakeVisible(noiseLevelLabel);
     
-    interferenceLabel.setText("Interference", juce::dontSendNotification);
+    // GAME-CHANGING: Signal Quality Label (replaces interference)
+    signalQualityLabel.setText("Signal Quality", juce::dontSendNotification);
+    signalQualityLabel.setJustificationType(juce::Justification::centred);
+    signalQualityLabel.setColour(juce::Label::textColourId, juce::Colour(0xff66ffcc)); // Special cyan color for the game-changer!
+    signalQualityLabel.setFont(juce::Font(12.0f, juce::Font::bold));
+    addAndMakeVisible(signalQualityLabel);
+    
+    // Dynamic Signal Strength Status Label (read-only display)
+    signalStrengthLabel.setText("Signal: Auto Dynamic", juce::dontSendNotification);
+    signalStrengthLabel.setJustificationType(juce::Justification::centred);
+    signalStrengthLabel.setColour(juce::Label::textColourId, juce::Colour(0xff99ff99)); // Green for status
+    signalStrengthLabel.setFont(juce::Font(10.0f));
+    addAndMakeVisible(signalStrengthLabel);
+    
+    // Legacy interference label (hidden but kept for compatibility)
+    interferenceLabel.setText("Legacy", juce::dontSendNotification);
     interferenceLabel.setJustificationType(juce::Justification::centred);
     interferenceLabel.setColour(juce::Label::textColourId, juce::Colours::white);
     interferenceLabel.setFont(juce::Font(12.0f));
-    addAndMakeVisible(interferenceLabel);
+    // addAndMakeVisible(interferenceLabel); // COMMENTED OUT - replaced by signal quality
     
     compressionLabel.setText("Compression", juce::dontSendNotification);
     compressionLabel.setJustificationType(juce::Justification::centred);
@@ -164,7 +202,7 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     nokiaButton.setToggleState(true, juce::dontSendNotification);
     
     // Initialize animated screen state
-    screenState.scrollingText = "NOKIA 3310 - Phone Effect Active";
+    screenState.scrollingText = "RETROCELL 3300 - Phone Effect Active";
     screenState.textScrollPosition = 0.0f;
     screenState.signalBars = 4;
     screenState.batteryLevel = 85;
@@ -184,9 +222,19 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     // Initialize display and start animation timer
     currentDisplay = phoneDisplays[0];
     currentPhoneIndex = 0;
-    currentPhoneLabel.setText("Nokia 3310", juce::dontSendNotification);
+    currentPhoneLabel.setText("RetroCell 3300", juce::dontSendNotification);
     currentPhoneLabel.setColour(juce::Label::textColourId, phoneDisplays[0].accentColor);
     audioProcessor.loadPhonePreset(TestAudioProcessor::Nokia);
+    
+    // Set initial Nokia frequency response defaults (classic GSM: 300Hz-3.4kHz)
+    audioProcessor.apvts.getParameter(TestAudioProcessor::LOW_CUT_ID)->setValueNotifyingHost(3.0f / 4.0f);  // Index 3: 300Hz
+    audioProcessor.apvts.getParameter(TestAudioProcessor::HIGH_CUT_ID)->setValueNotifyingHost(3.0f / 4.0f); // Index 3: 3.4kHz
+    
+    // Set initial Nokia characteristic settings (realistic GSM phone)
+    audioProcessor.apvts.getParameter(TestAudioProcessor::DISTORTION_ID)->setValueNotifyingHost(0.2f);    // 20% distortion
+    audioProcessor.apvts.getParameter(TestAudioProcessor::NOISE_LEVEL_ID)->setValueNotifyingHost(0.08f);  // 8% noise
+    audioProcessor.apvts.getParameter(TestAudioProcessor::INTERFERENCE_ID)->setValueNotifyingHost(0.15f); // 15% interference
+    audioProcessor.apvts.getParameter(TestAudioProcessor::COMPRESSION_ID)->setValueNotifyingHost(0.5f);   // 50% compression
     
     // Start animation timer for screen updates
     startTimer(16); // ~60fps
@@ -199,9 +247,15 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     highCutSlider.setLookAndFeel(phoneLookAndFeel.get());
     distortionSlider.setLookAndFeel(phoneLookAndFeel.get());
     noiseLevelSlider.setLookAndFeel(phoneLookAndFeel.get());
-    interferenceSlider.setLookAndFeel(phoneLookAndFeel.get());
+    signalQualityBox.setLookAndFeel(phoneLookAndFeel.get());  // FIXED: Changed from interferenceSlider
     compressionSlider.setLookAndFeel(phoneLookAndFeel.get());
     interferenceButton.setLookAndFeel(phoneLookAndFeel.get());
+    
+    // Initialize adaptive typography for RetroCell
+    updateAdaptiveTypography();
+    
+    // IMPORTANT: Call resized() to initialize phoneDisplayArea before first paint()
+    resized();
 }
 
 TestAudioProcessorEditor::~TestAudioProcessorEditor()
@@ -270,24 +324,29 @@ void TestAudioProcessorEditor::resized()
     auto leftKnobSpacing = 30; // More spacing between knobs
     auto leftStartY = (leftControlsArea.getHeight() - (3 * leftKnobHeight + 2 * leftKnobSpacing)) / 2;
     
-    // Low Cut (top left)
-    lowCutSlider.setBounds(leftControlsArea.getX() + 35, leftStartY, 70, 70);
-    lowCutLabel.setBounds(leftControlsArea.getX() + 20, leftStartY + 72, 100, 15);
+    // Low Cut (top left) - Horizontal slider with Hz markings - positioned lower to avoid title clash
+    lowCutSlider.setBounds(leftControlsArea.getX() + 10, leftStartY + 60, 120, 50); // More height for text box
+    lowCutLabel.setBounds(leftControlsArea.getX() + 20, leftStartY + 42, 100, 15);
     
     // Distortion (middle left)
     distortionSlider.setBounds(leftControlsArea.getX() + 35, leftStartY + leftKnobHeight + leftKnobSpacing, 70, 70);
     distortionLabel.setBounds(leftControlsArea.getX() + 20, leftStartY + leftKnobHeight + leftKnobSpacing + 72, 100, 15);
     
-    // Interference (bottom left)
-    interferenceSlider.setBounds(leftControlsArea.getX() + 35, leftStartY + 2 * (leftKnobHeight + leftKnobSpacing), 70, 70);
-    interferenceLabel.setBounds(leftControlsArea.getX() + 20, leftStartY + 2 * (leftKnobHeight + leftKnobSpacing) + 72, 100, 15);
+    // GAME-CHANGING: Signal Quality (bottom left) - ComboBox instead of slider
+    signalQualityBox.setBounds(leftControlsArea.getX() + 15, leftStartY + 2 * (leftKnobHeight + leftKnobSpacing), 110, 25);
+    signalQualityLabel.setBounds(leftControlsArea.getX() + 15, leftStartY + 2 * (leftKnobHeight + leftKnobSpacing) - 18, 110, 15);
+    signalStrengthLabel.setBounds(leftControlsArea.getX() + 15, leftStartY + 2 * (leftKnobHeight + leftKnobSpacing) + 28, 110, 12);
+    
+    // Legacy interference components (hidden)
+    // interferenceSlider.setBounds(leftControlsArea.getX() + 35, leftStartY + 2 * (leftKnobHeight + leftKnobSpacing), 70, 70);
+    // interferenceLabel.setBounds(leftControlsArea.getX() + 20, leftStartY + 2 * (leftKnobHeight + leftKnobSpacing) + 72, 100, 15);
     
     // Position RIGHT SIDE CONTROLS (3 knobs vertically with more spacing)
     auto rightStartY = leftStartY; // Same vertical alignment as left side
     
-    // High Cut (top right)
-    highCutSlider.setBounds(rightControlsArea.getX() + 35, rightStartY, 70, 70);
-    highCutLabel.setBounds(rightControlsArea.getX() + 20, rightStartY + 72, 100, 15);
+    // High Cut (top right) - Horizontal slider with Hz markings - positioned lower to avoid title clash
+    highCutSlider.setBounds(rightControlsArea.getX() + 10, rightStartY + 60, 120, 50); // More height for text box
+    highCutLabel.setBounds(rightControlsArea.getX() + 20, rightStartY + 42, 100, 15);
     
     // Noise Level (middle right)
     noiseLevelSlider.setBounds(rightControlsArea.getX() + 35, rightStartY + leftKnobHeight + leftKnobSpacing, 70, 70);
@@ -328,15 +387,26 @@ void TestAudioProcessorEditor::buttonClicked (juce::Button* button)
         currentPhoneIndex = 0;
         nokiaButton.setToggleState(true, juce::dontSendNotification);
         audioProcessor.loadPhonePreset(TestAudioProcessor::Nokia);
-        currentPhoneLabel.setText("Nokia 3310", juce::dontSendNotification);
+        currentPhoneLabel.setText("RetroCell 3300", juce::dontSendNotification);
         currentPhoneLabel.setColour(juce::Label::textColourId, phoneDisplays[0].accentColor);
+        
+        // Set Nokia frequency response defaults (classic GSM: 300Hz-3.4kHz)
+        audioProcessor.apvts.getParameter(TestAudioProcessor::LOW_CUT_ID)->setValueNotifyingHost(3.0f / 4.0f);  // Index 3: 300Hz
+        audioProcessor.apvts.getParameter(TestAudioProcessor::HIGH_CUT_ID)->setValueNotifyingHost(3.0f / 4.0f); // Index 3: 3.4kHz
+        
+        // Set Nokia characteristic audio settings (realistic GSM phone) - using target values for smooth transitions
+        audioProcessor.targetDistortion = 0.2f;    // 20% distortion
+        audioProcessor.targetNoise = 0.08f;        // 8% noise
+        audioProcessor.targetInterference = 0.15f; // 15% interference
+        audioProcessor.targetCompression = 0.5f;   // 50% compression
         
         // Switch to Nokia-themed knobs
         phoneLookAndFeel->setPhoneType(0);
+        updateAdaptiveTypography();
         repaint(); // Refresh knob styling
         
         // Update screen content for Nokia
-        screenState.scrollingText = "NOKIA 3310 - Classic GSM Phone";
+        screenState.scrollingText = "RETROCELL 3300 - Classic GSM Phone";
         screenState.signalBars = 4;
         screenState.batteryLevel = 85;
         screenState.isInCall = false;
@@ -347,11 +417,18 @@ void TestAudioProcessorEditor::buttonClicked (juce::Button* button)
         currentPhoneIndex = 1;
         iphoneButton.setToggleState(true, juce::dontSendNotification);
         audioProcessor.loadPhonePreset(TestAudioProcessor::iPhone);
-        currentPhoneLabel.setText("iPhone", juce::dontSendNotification);
+        currentPhoneLabel.setText("TouchPro", juce::dontSendNotification);
         currentPhoneLabel.setColour(juce::Label::textColourId, phoneDisplays[1].accentColor);
+        
+        // Set iPhone characteristic audio settings (clean modern smartphone) - using target values for smooth transitions
+        audioProcessor.targetDistortion = 0.05f;   // 5% minimal distortion
+        audioProcessor.targetNoise = 0.03f;        // 3% advanced noise cancellation
+        audioProcessor.targetInterference = 0.04f; // 4% digital shielding
+        audioProcessor.targetCompression = 0.2f;   // 20% modern compression
         
         // Switch to iPhone-themed knobs
         phoneLookAndFeel->setPhoneType(1);
+        updateAdaptiveTypography();
         repaint(); // Refresh knob styling
         
         // Update screen content for iPhone
@@ -367,11 +444,22 @@ void TestAudioProcessorEditor::buttonClicked (juce::Button* button)
         currentPhoneIndex = 2;
         sonyButton.setToggleState(true, juce::dontSendNotification);
         audioProcessor.loadPhonePreset(TestAudioProcessor::SonyEricsson);
-        currentPhoneLabel.setText("Sony Ericsson", juce::dontSendNotification);
+        currentPhoneLabel.setText("FlipClassic", juce::dontSendNotification);
         currentPhoneLabel.setColour(juce::Label::textColourId, phoneDisplays[2].accentColor);
+        
+        // Set Sony Ericsson frequency response defaults (vintage flip phone: 250Hz-2.8kHz)
+        audioProcessor.apvts.getParameter(TestAudioProcessor::LOW_CUT_ID)->setValueNotifyingHost(2.0f / 4.0f);  // Index 2: 250Hz
+        audioProcessor.apvts.getParameter(TestAudioProcessor::HIGH_CUT_ID)->setValueNotifyingHost(1.0f / 4.0f); // Index 1: 2.8kHz
+        
+        // Set Sony Ericsson characteristic audio settings (vintage analog flip phone) - using target values for smooth transitions
+        audioProcessor.targetDistortion = 0.35f;   // 35% high distortion
+        audioProcessor.targetNoise = 0.12f;        // 12% electrical noise
+        audioProcessor.targetInterference = 0.18f; // 18% RF susceptibility
+        audioProcessor.targetCompression = 0.6f;   // 60% aggressive compression
         
         // Switch to Sony-themed knobs
         phoneLookAndFeel->setPhoneType(2);
+        updateAdaptiveTypography(); // Update fonts for FlipClassic
         repaint(); // Refresh knob styling
         
         // Update screen content for Sony Ericsson
@@ -439,6 +527,41 @@ void TestAudioProcessorEditor::timerCallback()
     // Always update screen animations and audio monitoring
     updateScreenAnimations();
     updateAudioLevel();
+    
+    // GAME-CHANGING: Update Dynamic Signal Strength Display
+    float currentSignal = audioProcessor.getCurrentSignalStrength();
+    int signalBars = audioProcessor.getSignalBars();
+    bool isDropping = audioProcessor.isCallDropping();
+    float voiceActivity = audioProcessor.getVoiceActivity();
+    
+    // Update signal strength status label with real-time info
+    juce::String signalStatusText;
+    if (isDropping)
+    {
+        signalStatusText = "Signal: DROPPING";
+        signalStrengthLabel.setColour(juce::Label::textColourId, juce::Colours::red);
+    }
+    else
+    {
+        signalStatusText = "Signal: " + juce::String(signalBars) + "/5 bars (" + 
+                          juce::String(static_cast<int>(currentSignal * 100)) + "%)";
+        
+        if (signalBars >= 4)
+            signalStrengthLabel.setColour(juce::Label::textColourId, juce::Colour(0xff99ff99)); // Green
+        else if (signalBars >= 3)
+            signalStrengthLabel.setColour(juce::Label::textColourId, juce::Colour(0xffffff99)); // Yellow
+        else if (signalBars >= 2)
+            signalStrengthLabel.setColour(juce::Label::textColourId, juce::Colour(0xffffaa66)); // Orange
+        else
+            signalStrengthLabel.setColour(juce::Label::textColourId, juce::Colour(0xffff6666)); // Red
+    }
+    
+    signalStrengthLabel.setText(signalStatusText, juce::dontSendNotification);
+    
+    // Update screen state with real-time signal info for phone displays
+    screenState.signalBars = signalBars;
+    screenState.isProcessingAudio = voiceActivity > 0.1f;
+    screenState.audioLevel = voiceActivity;
     
     // Handle button press effects
     if (pressedButton != nullptr)
@@ -839,7 +962,7 @@ float TestAudioProcessorEditor::getCurrentAudioLevel()
     // Simulate audio activity based on parameter changes
     level += std::abs(distortionSlider.getValue()) * 0.3f;
     level += std::abs(noiseLevelSlider.getValue()) * 0.2f;
-    level += std::abs(interferenceSlider.getValue()) * 0.2f;
+    level += (signalQualityBox.getSelectedItemIndex() / 5.0f) * 0.2f;  // FIXED: Changed from interferenceSlider
     
     return juce::jmin(1.0f, level);
 }
@@ -1318,4 +1441,202 @@ void TestAudioProcessorEditor::drawLEDErrorButton(juce::Graphics& g, juce::Recta
     auto reflectionBounds = ledBounds.removeFromTop(ledBounds.getHeight() * 0.4f);
     g.setColour(juce::Colour(0x20ffffff));
     g.fillRoundedRectangle(reflectionBounds, 1.0f);
-} 
+}
+
+//==============================================================================
+// ADAPTIVE TYPOGRAPHY - Changes fonts based on selected phone
+//==============================================================================
+
+void TestAudioProcessorEditor::updateAdaptiveTypography()
+{
+    juce::Font currentFont;
+    
+    switch (currentPhoneIndex)
+    {
+        case 0: // RetroCell 3300 (Nokia-inspired) - Pixelated retro font
+            currentFont = juce::Font("Monaco", 12.0f, juce::Font::bold);
+            titleLabel.setText("RETROCELL PHONE EFFECT", juce::dontSendNotification);
+            break;
+            
+        case 1: // TouchPro (iPhone-inspired) - Clean modern font  
+            currentFont = juce::Font("SF Pro Display", 12.0f, juce::Font::plain);
+            titleLabel.setText("TouchPro Phone Effect", juce::dontSendNotification);
+            break;
+            
+        case 2: // FlipClassic (Sony-inspired) - LCD-style font
+            currentFont = juce::Font("Courier New", 12.0f, juce::Font::bold);
+            titleLabel.setText("FLIPCLASSIC PHONE EFFECT", juce::dontSendNotification);
+            break;
+            
+        default:
+            currentFont = juce::Font(12.0f);
+            break;
+    }
+    
+    // Apply adaptive font to all labels
+    titleLabel.setFont(currentFont.withHeight(18.0f));
+    currentPhoneLabel.setFont(currentFont.withHeight(14.0f));
+    lowCutLabel.setFont(currentFont);
+    highCutLabel.setFont(currentFont);
+    distortionLabel.setFont(currentFont);
+    noiseLevelLabel.setFont(currentFont);
+    interferenceLabel.setFont(currentFont);
+    compressionLabel.setFont(currentFont);
+    interferenceButtonLabel.setFont(currentFont.withHeight(10.0f));
+    
+    repaint();
+}
+
+//==============================================================================
+// GAME-CHANGING: Dynamic Signal Strength Display Methods
+
+void TestAudioProcessorEditor::drawDynamicSignalBars(juce::Graphics& g, juce::Rectangle<int> area, float signalStrength, bool isDropping)
+{
+    // Modern signal bars with dynamic strength indication
+    auto barWidth = 4;
+    auto barSpacing = 2;
+    auto maxBars = 5;
+    auto totalWidth = maxBars * barWidth + (maxBars - 1) * barSpacing;
+    auto startX = area.getCentreX() - totalWidth / 2;
+    
+    // Calculate active bars based on signal strength
+    int activeBars = static_cast<int>(signalStrength * maxBars);
+    activeBars = juce::jlimit(0, maxBars, activeBars);
+    
+    for (int i = 0; i < maxBars; ++i)
+    {
+        auto barHeight = 6 + i * 3; // Increasing height
+        auto barY = area.getBottom() - barHeight;
+        auto barX = startX + i * (barWidth + barSpacing);
+        
+        juce::Rectangle<int> bar(barX, barY, barWidth, barHeight);
+        
+        if (i < activeBars)
+        {
+            // Active bars - color based on signal quality
+            if (isDropping)
+                g.setColour(juce::Colours::red); // Dropping signal
+            else if (signalStrength > 0.8f)
+                g.setColour(juce::Colours::green); // Excellent signal
+            else if (signalStrength > 0.6f)
+                g.setColour(juce::Colours::yellow); // Good signal
+            else if (signalStrength > 0.3f)
+                g.setColour(juce::Colours::orange); // Fair signal
+            else
+                g.setColour(juce::Colours::red); // Poor signal
+        }
+        else
+        {
+            // Inactive bars
+            g.setColour(juce::Colour(0xff333333));
+        }
+        
+        g.fillRoundedRectangle(bar.toFloat(), 1.0f);
+    }
+}
+
+void TestAudioProcessorEditor::drawVoiceActivityIndicator(juce::Graphics& g, juce::Rectangle<int> area, float voiceActivity)
+{
+    // Voice activity level indicator (like a VU meter)
+    auto indicatorWidth = area.getWidth() - 4;
+    auto indicatorHeight = 8;
+    auto indicatorArea = juce::Rectangle<int>(
+        area.getX() + 2, 
+        area.getCentreY() - indicatorHeight / 2,
+        indicatorWidth, 
+        indicatorHeight
+    );
+    
+    // Background
+    g.setColour(juce::Colour(0xff222222));
+    g.fillRoundedRectangle(indicatorArea.toFloat(), 2.0f);
+    
+    // Voice activity level
+    auto activeWidth = static_cast<int>(voiceActivity * indicatorWidth);
+    if (activeWidth > 0)
+    {
+        auto activeArea = indicatorArea.withWidth(activeWidth);
+        
+        // Color based on activity level
+        if (voiceActivity > 0.8f)
+            g.setColour(juce::Colours::lime);
+        else if (voiceActivity > 0.5f)
+            g.setColour(juce::Colours::yellow);
+        else if (voiceActivity > 0.2f)
+            g.setColour(juce::Colours::orange);
+        else
+            g.setColour(juce::Colours::green);
+            
+        g.fillRoundedRectangle(activeArea.toFloat(), 2.0f);
+    }
+}
+
+void TestAudioProcessorEditor::drawCallQualityStatus(juce::Graphics& g, juce::Rectangle<int> area, int signalBars, bool isDropping)
+{
+    g.setFont(juce::Font(10.0f, juce::Font::bold));
+    
+    juce::String statusText;
+    juce::Colour statusColor;
+    
+    if (isDropping)
+    {
+        statusText = "CALL DROPPING";
+        statusColor = juce::Colours::red;
+    }
+    else
+    {
+        switch (signalBars)
+        {
+            case 5: statusText = "EXCELLENT"; statusColor = juce::Colours::green; break;
+            case 4: statusText = "GOOD"; statusColor = juce::Colours::lightgreen; break;
+            case 3: statusText = "FAIR"; statusColor = juce::Colours::yellow; break;
+            case 2: statusText = "POOR"; statusColor = juce::Colours::orange; break;
+            case 1: statusText = "WEAK"; statusColor = juce::Colours::red; break;
+            default: statusText = "NO SIGNAL"; statusColor = juce::Colours::darkred; break;
+        }
+    }
+    
+    g.setColour(statusColor);
+    g.drawText(statusText, area, juce::Justification::centred, true);
+}
+
+void TestAudioProcessorEditor::drawSignalStrengthMeter(juce::Graphics& g, juce::Rectangle<int> area, float strength, bool animated)
+{
+    // Circular signal strength meter
+    auto centerX = area.getCentreX();
+    auto centerY = area.getCentreY();
+    auto radius = juce::jmin(area.getWidth(), area.getHeight()) / 2 - 2;
+    
+    // Background circle
+    g.setColour(juce::Colour(0xff222222));
+    g.drawEllipse(centerX - radius, centerY - radius, radius * 2, radius * 2, 2.0f);
+    
+    // Signal strength arc
+    auto startAngle = juce::MathConstants<float>::pi * 1.25f; // Start from bottom-left
+    auto endAngle = juce::MathConstants<float>::pi * 2.75f;   // End at bottom-right
+    auto currentAngle = startAngle + (endAngle - startAngle) * strength;
+    
+    // Color based on strength
+    juce::Colour arcColor;
+    if (strength > 0.8f) arcColor = juce::Colours::green;
+    else if (strength > 0.6f) arcColor = juce::Colours::yellow;
+    else if (strength > 0.3f) arcColor = juce::Colours::orange;
+    else arcColor = juce::Colours::red;
+    
+    g.setColour(arcColor);
+    
+    // Draw arc
+    juce::Path arcPath;
+    arcPath.addCentredArc(centerX, centerY, radius - 4, radius - 4, 0.0f, startAngle, currentAngle, true);
+    g.strokePath(arcPath, juce::PathStrokeType(3.0f));
+    
+    // Animated pulse effect
+    if (animated && strength > 0.1f)
+    {
+        auto pulseAlpha = 0.3f + 0.2f * std::sin(screenAnimationTimer * 0.1f);
+        g.setColour(arcColor.withAlpha(pulseAlpha));
+        g.strokePath(arcPath, juce::PathStrokeType(6.0f));
+    }
+}
+
+ 

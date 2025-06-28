@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<JUCERPROJECT id="Drzfth" name="test" projectType="audioplug" useAppConfig="0"
-              addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" pluginFormats="buildAU"
-              pluginCharacteristicsValue="pluginWantsMidiIn">
-  <MAINGROUP id="USbWTh" name="test">
+<JUCERPROJECT id="Drzfth" name="Cellyz" projectType="audioplug" useAppConfig="0"
+              addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" pluginFormats="buildAU,buildVST3"
+              pluginCharacteristicsValue="pluginWantsMidiIn" pluginName="Cellyz Phone FX"
+              pluginDesc="Professional phone call effects plugin with authentic signal simulation"
+              pluginManufacturer="Cellyz Audio" pluginManufacturerWebsite="www.cellyz.com"
+              pluginManufacturerEmail="support@cellyz.com" companyName="Cellyz Audio"
+              companyCopyright="Cellyz Audio" companyWebsite="www.cellyz.com"
+              pluginAAXCategory="2" pluginVSTCategory="kPlugCategEffect"
+              pluginAUMainType="'aumf'" pluginVST3Category="Fx" displaySplashScreen="0"
+              reportAppUsage="0" splashScreenColour="Dark">
+  <MAINGROUP id="USbWTh" name="Cellyz">
     <GROUP id="{275F4756-263B-CECA-B240-31D89F9DCB5E}" name="Source">
       <FILE id="xqZXjR" name="PluginProcessor.cpp" compile="1" resource="0"
             file="Source/PluginProcessor.cpp"/>
@@ -20,7 +27,7 @@
     <MODULE id="juce_audio_formats" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_audio_plugin_client" showAllCode="1" useLocalCopy="0"
             useGlobalPath="1"/>
-    <MODULE id="juce_audio_processors" showAllCode="1" useLocalCopy="1" useGlobalPath="1"/>
+    <MODULE id="juce_audio_processors" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_audio_utils" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_core" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_data_structures" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
@@ -35,8 +42,8 @@
   <EXPORTFORMATS>
     <XCODE_MAC targetFolder="Builds/MacOSX">
       <CONFIGURATIONS>
-        <CONFIGURATION isDebug="1" name="Debug" targetName="test"/>
-        <CONFIGURATION isDebug="0" name="Release" targetName="test"/>
+        <CONFIGURATION isDebug="1" name="Debug" targetName="Cellyz"/>
+        <CONFIGURATION isDebug="0" name="Release" targetName="Cellyz"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_audio_basics"/>
@@ -45,7 +52,35 @@
         <MODULEPATH id="juce_audio_plugin_client"/>
         <MODULEPATH id="juce_audio_processors"/>
         <MODULEPATH id="juce_audio_utils"/>
+        <MODULEPATH id="juce_core"/>
+        <MODULEPATH id="juce_data_structures"/>
+        <MODULEPATH id="juce_dsp"/>
+        <MODULEPATH id="juce_events"/>
+        <MODULEPATH id="juce_graphics"/>
+        <MODULEPATH id="juce_gui_basics"/>
+        <MODULEPATH id="juce_gui_extra"/>
       </MODULEPATHS>
     </XCODE_MAC>
+    <VS2022 targetFolder="Builds/Windows">
+      <CONFIGURATIONS>
+        <CONFIGURATION isDebug="1" name="Debug" targetName="Cellyz" winArchitecture="x64"/>
+        <CONFIGURATION isDebug="0" name="Release" targetName="Cellyz" winArchitecture="x64"/>
+      </CONFIGURATIONS>
+      <MODULEPATHS>
+        <MODULEPATH id="juce_audio_basics"/>
+        <MODULEPATH id="juce_audio_devices"/>
+        <MODULEPATH id="juce_audio_formats"/>
+        <MODULEPATH id="juce_audio_plugin_client"/>
+        <MODULEPATH id="juce_audio_processors"/>
+        <MODULEPATH id="juce_audio_utils"/>
+        <MODULEPATH id="juce_core"/>
+        <MODULEPATH id="juce_data_structures"/>
+        <MODULEPATH id="juce_dsp"/>
+        <MODULEPATH id="juce_events"/>
+        <MODULEPATH id="juce_graphics"/>
+        <MODULEPATH id="juce_gui_basics"/>
+        <MODULEPATH id="juce_gui_extra"/>
+      </MODULEPATHS>
+    </VS2022>
   </EXPORTFORMATS>
 </JUCERPROJECT>

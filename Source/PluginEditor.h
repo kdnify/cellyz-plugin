@@ -99,8 +99,17 @@ private:
     void drawAnalogMeter(juce::Graphics& g, juce::Rectangle<int> area, float level);
     void drawScrollingText(juce::Graphics& g, juce::Rectangle<int> area, const juce::String& text, float position);
     
+    // GAME-CHANGING: Dynamic Signal Strength Display
+    void drawDynamicSignalBars(juce::Graphics& g, juce::Rectangle<int> area, float signalStrength, bool isDropping);
+    void drawVoiceActivityIndicator(juce::Graphics& g, juce::Rectangle<int> area, float voiceActivity);
+    void drawCallQualityStatus(juce::Graphics& g, juce::Rectangle<int> area, int signalBars, bool isDropping);
+    void drawSignalStrengthMeter(juce::Graphics& g, juce::Rectangle<int> area, float strength, bool animated);
+    
     // Audio level monitoring
     void updateAudioLevel();
+    void updatePhoneState();
+    void loadPhoneState(int phoneIndex);
+    void updateAdaptiveTypography();  // NEW: Changes fonts based on selected phone
     float getCurrentAudioLevel();
     
     // Screen animation updates
@@ -153,14 +162,21 @@ private:
     juce::TextButton sonyButton;
     
     // Parameter controls (positioned around phone display) - DAW Automatable!
-    juce::Slider lowCutSlider;
-    juce::Slider highCutSlider;  
+    juce::Slider lowCutSlider;      // Back to slider for better control
+    juce::Slider highCutSlider;     // Back to slider for better control
     juce::Slider distortionSlider;
     juce::Slider noiseLevelSlider;
-    juce::Slider interferenceSlider;
     juce::Slider compressionSlider;
     
-    // NEW: Red interference error button instead of slider
+    // GAME-CHANGING: Signal Quality Control (replaces interference)
+    juce::ComboBox signalQualityBox; // Choice between Perfect, Good, Fair, Poor, Breaking Up, Auto Dynamic
+    
+    // DYNAMIC: Signal Strength Display Components (read-only, shows real-time status)
+    juce::Rectangle<int> signalBarsArea;        // Area for signal bars display
+    juce::Rectangle<int> voiceActivityArea;     // Area for voice activity indicator
+    juce::Rectangle<int> callQualityArea;       // Area for call quality status
+    
+    // NEW: Red interference error button (legacy - may remove)
     juce::TextButton interferenceButton;
     bool interferenceActive = false;
     
@@ -168,8 +184,12 @@ private:
     juce::Label highCutLabel;
     juce::Label distortionLabel;
     juce::Label noiseLevelLabel;
-    juce::Label interferenceLabel;
     juce::Label compressionLabel;
+    juce::Label signalQualityLabel;         // NEW: Signal Quality label
+    juce::Label signalStrengthLabel;        // NEW: Signal Strength status label
+    
+    // Legacy labels (may remove)
+    juce::Label interferenceLabel;
     juce::Label interferenceButtonLabel;
 
     // Parameter Attachments for DAW automation
@@ -177,10 +197,13 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> highCutAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> distortionAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> noiseLevelAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> interferenceAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> compressionAttachment;
     
-    // NEW: Button attachment for interference preset
+    // GAME-CHANGING: Signal Quality Attachment
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> signalQualityAttachment;
+    
+    // Legacy attachments (may remove)
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> interferenceAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> interferenceButtonAttachment;
     
     // Current phone index
