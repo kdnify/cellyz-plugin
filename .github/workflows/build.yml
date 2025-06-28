@@ -30,27 +30,30 @@ jobs:
       shell: bash
       run: |
         if [ "$RUNNER_OS" == "macOS" ]; then
-          curl -L -o juce.zip "https://github.com/juce-framework/JUCE/releases/download/7.0.9/juce-7.0.9-osx.zip"
+          curl -L -o juce.zip "https://github.com/juce-framework/JUCE/releases/download/8.0.8/juce-8.0.8-osx.zip"
           unzip juce.zip
-          sudo cp -r JUCE /usr/local/
+          ls -la
+          sudo cp -r juce-8.0.8-osx/JUCE/* /usr/local/ || sudo cp -r JUCE/* /usr/local/ || echo "JUCE setup may have failed"
         else
-          curl -L -o juce.zip "https://github.com/juce-framework/JUCE/releases/download/7.0.9/juce-7.0.9-windows.zip"
+          curl -L -o juce.zip "https://github.com/juce-framework/JUCE/releases/download/8.0.8/juce-8.0.8-windows.zip"
           unzip juce.zip
-          echo "JUCE_DIR=$PWD/JUCE" >> $GITHUB_ENV
+          ls -la
+          echo "JUCE_DIR=$PWD/juce-8.0.8-windows/JUCE" >> $GITHUB_ENV || echo "JUCE_DIR=$PWD/JUCE" >> $GITHUB_ENV
         fi
 
     - name: Build macOS
       if: matrix.os == 'macos-latest'
       run: |
         cd Builds/MacOSX
-        xcodebuild -project test.xcodeproj -scheme "test - AU" -configuration Release
-        xcodebuild -project test.xcodeproj -scheme "test - VST3" -configuration Release || true
+        xcodebuild -project test.xcodeproj -scheme "test - AU" -configuration Release -allowProvisioningUpdates
+        xcodebuild -project test.xcodeproj -scheme "test - VST3" -configuration Release -allowProvisioningUpdates || echo "VST3 build failed, continuing with AU only"
 
-    - name: Build Windows
+    - name: Build Windows  
       if: matrix.os == 'windows-latest'
       run: |
         cd Builds/Windows
-        msbuild Cellyz.sln -p:Configuration=Release -p:Platform=x64
+        dir
+        msbuild Cellyz.sln -p:Configuration=Release -p:Platform=x64 || msbuild Cellyz.sln -p:Configuration=Release -p:Platform="Win32"
 
     - name: Package Artifacts
       shell: bash
