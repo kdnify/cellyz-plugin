@@ -58,20 +58,6 @@ jobs:
         cd Builds/Windows
         msbuild Cellyz.sln -p:Configuration=Release -p:Platform=x64 -v:minimal
 
-    - name: Setup Inno Setup (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        echo "Downloading Inno Setup..."
-        curl -L -o innosetup.exe "https://files.jrsoftware.org/is/6/innosetup-6.2.2.exe"
-        echo "Installing Inno Setup..."
-        ./innosetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /TIMEOUT=300
-        echo "Waiting for installation..."
-        sleep 30
-        ls "C:\Program Files (x86)\" || echo "Program Files x86 not found"
-        ls "C:\Program Files (x86)\Inno Setup 6\" || echo "Inno Setup not found"
-        echo "C:\Program Files (x86)\Inno Setup 6" >> $GITHUB_PATH
-      shell: bash
-
     - name: Package Artifacts
       shell: bash
       run: |
@@ -106,23 +92,41 @@ jobs:
               find Builds/Windows -type f -name "*.dll" -o -name "*.vst3" -o -name "Cellyz*"
             fi
             
-            # Build Windows installer
-            if [ -d "artifacts/Cellyz.vst3" ]; then
-              echo "Building Windows installer..."
-              cd installer
-              iscc cellyz-installer.iss
-              if [ -f "Cellyz_Phone_FX_v1.0_Setup.exe" ]; then
-                cp "Cellyz_Phone_FX_v1.0_Setup.exe" ../artifacts/
-                echo "✓ Built Windows installer"
-              else
-                echo "⚠️ Installer build failed"
-              fi
-              cd ..
-            fi
+            # Windows installer is built by separate Inno Setup action
+            echo "Windows VST3 ready for installer (built separately)"
           fi
         
         # List final artifacts
         echo "Final artifacts:"
+        ls -la artifacts/
+
+    - name: Build Windows Installer (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+      with:
+        path: installer/cellyz-installer.iss
+        options: /O+
+
+    - name: Collect Windows Installer (Windows)
+      if: matrix.os == 'windows-latest'
+      shell: bash
+      run: |
+        echo "Looking for compiled installer..."
+        find . -name "*.exe" -type f | grep -i setup || echo "No setup.exe found"
+        find . -name "*Cellyz*.exe" -type f || echo "No Cellyz exe found"
+        # The Inno Setup action typically outputs to the installer directory or project root
+        if [ -f "installer/Cellyz_Phone_FX_v1.0_Setup.exe" ]; then
+          cp "installer/Cellyz_Phone_FX_v1.0_Setup.exe" artifacts/
+          echo "✓ Found installer in installer directory"
+        elif [ -f "Cellyz_Phone_FX_v1.0_Setup.exe" ]; then
+          cp "Cellyz_Phone_FX_v1.0_Setup.exe" artifacts/
+          echo "✓ Found installer in project root"
+        else
+          echo "⚠️ Installer not found, listing all exe files:"
+          find . -name "*.exe" -type f || echo "No exe files found"
+        fi
+        
+        echo "Final artifacts with installer:"
         ls -la artifacts/
 
     - name: Upload Artifacts
