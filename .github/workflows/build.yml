@@ -61,8 +61,14 @@ jobs:
     - name: Setup Inno Setup (Windows)
       if: matrix.os == 'windows-latest'
       run: |
+        echo "Downloading Inno Setup..."
         curl -L -o innosetup.exe "https://files.jrsoftware.org/is/6/innosetup-6.2.2.exe"
-        ./innosetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
+        echo "Installing Inno Setup..."
+        ./innosetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /TIMEOUT=300
+        echo "Waiting for installation..."
+        sleep 30
+        ls "C:\Program Files (x86)\" || echo "Program Files x86 not found"
+        ls "C:\Program Files (x86)\Inno Setup 6\" || echo "Inno Setup not found"
         echo "C:\Program Files (x86)\Inno Setup 6" >> $GITHUB_PATH
       shell: bash
 
