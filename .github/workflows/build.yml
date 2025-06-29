@@ -26,10 +26,31 @@ jobs:
     - name: Setup JUCE (macOS)
       if: matrix.os == 'macos-latest'
       run: |
+        echo "Downloading JUCE 8.0.8 for macOS..."
         curl -L -o juce.zip "https://github.com/juce-framework/JUCE/releases/download/8.0.8/juce-8.0.8-osx.zip"
         unzip juce.zip
-        sudo mkdir -p /usr/local
-        sudo cp -r juce-8.0.8-osx/JUCE/* /usr/local/ 2>/dev/null || sudo cp -r JUCE/* /usr/local/ 2>/dev/null || echo "JUCE setup completed"
+        
+        # Find the JUCE directory (could be JUCE or juce-8.0.8-osx/JUCE)
+        if [ -d "juce-8.0.8-osx/JUCE" ]; then
+          JUCE_DIR="juce-8.0.8-osx/JUCE"
+        elif [ -d "JUCE" ]; then
+          JUCE_DIR="JUCE"
+        else
+          echo "JUCE directory structure:"
+          ls -la
+          exit 1
+        fi
+        
+        echo "Installing JUCE from: $JUCE_DIR"
+        sudo mkdir -p /usr/local/juce
+        sudo cp -r "$JUCE_DIR"/* /usr/local/juce/
+        
+        # Verify installation
+        echo "JUCE installation:"
+        ls -la /usr/local/juce/
+        
+        # Set JUCE_PATH for the build
+        echo "JUCE_PATH=/usr/local/juce" >> $GITHUB_ENV
 
     - name: Setup JUCE (Windows)
       if: matrix.os == 'windows-latest'
@@ -45,8 +66,8 @@ jobs:
       if: matrix.os == 'macos-latest'
       run: |
         cd Builds/MacOSX
-        xcodebuild -project Cellyz.xcodeproj -scheme "Cellyz - AU" -configuration Release -allowProvisioningUpdates
-        xcodebuild -project Cellyz.xcodeproj -scheme "Cellyz - VST3" -configuration Release -allowProvisioningUpdates || echo "VST3 build failed, continuing with AU only"
+        xcodebuild -project test.xcodeproj -scheme "test - AU" -configuration Release -allowProvisioningUpdates
+        xcodebuild -project test.xcodeproj -scheme "test - VST3" -configuration Release -allowProvisioningUpdates || echo "VST3 build failed, continuing with AU only"
 
     - name: Setup MSBuild (Windows)
       if: matrix.os == 'windows-latest'
@@ -65,15 +86,7 @@ jobs:
         if [ "$RUNNER_OS" == "macOS" ]; then
           echo "Collecting macOS artifacts..."
           find Builds/MacOSX -name "*.component" -o -name "*.vst3" | head -10
-          if [ -d "Builds/MacOSX/build/Release/Cellyz.component" ]; then
-            cp -r "Builds/MacOSX/build/Release/Cellyz.component" artifacts/
-            echo "✓ Copied AU plugin"
-          fi
-          if [ -d "Builds/MacOSX/build/Release/Cellyz.vst3" ]; then
-            cp -r "Builds/MacOSX/build/Release/Cellyz.vst3" artifacts/
-            echo "✓ Copied VST3 plugin"
-          fi
-          # Also check for test.* plugins in case they exist
+          # Look for both test.* and Cellyz.* plugins (naming inconsistency)
           if [ -d "Builds/MacOSX/build/Release/test.component" ]; then
             cp -r "Builds/MacOSX/build/Release/test.component" artifacts/
             echo "✓ Copied test AU plugin"
@@ -81,6 +94,14 @@ jobs:
           if [ -d "Builds/MacOSX/build/Release/test.vst3" ]; then
             cp -r "Builds/MacOSX/build/Release/test.vst3" artifacts/
             echo "✓ Copied test VST3 plugin"
+          fi
+          if [ -d "Builds/MacOSX/build/Release/Cellyz.component" ]; then
+            cp -r "Builds/MacOSX/build/Release/Cellyz.component" artifacts/
+            echo "✓ Copied Cellyz AU plugin"
+          fi
+          if [ -d "Builds/MacOSX/build/Release/Cellyz.vst3" ]; then
+            cp -r "Builds/MacOSX/build/Release/Cellyz.vst3" artifacts/
+            echo "✓ Copied Cellyz VST3 plugin"
           fi
         else
           echo "Collecting Windows artifacts..."
