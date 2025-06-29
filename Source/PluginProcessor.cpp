@@ -435,12 +435,12 @@ void TestAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             auto* channelData = buffer.getWritePointer(channel);
             for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
                 // Digital quantization artifacts
-                float quantizationNoise = (random.nextFloat() - 0.5f) * interferenceLevel * 0.03f;
+                float localQuantizationNoise = (random.nextFloat() - 0.5f) * interferenceLevel * 0.03f;
                 
                 // RF interference (high-frequency buzzing)
-                float rfNoise = std::sin(2.0f * M_PI * 2000.0f * sample / getSampleRate()) * interferenceLevel * 0.02f;
+                float rfNoise = std::sin(2.0f * juce::MathConstants<float>::pi * 2000.0f * sample / getSampleRate()) * interferenceLevel * 0.02f;
                 
-                channelData[sample] += quantizationNoise + rfNoise;
+                channelData[sample] += localQuantizationNoise + rfNoise;
             }
         }
     }
@@ -453,7 +453,7 @@ void TestAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             auto* channelData = buffer.getWritePointer(channel);
             for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
                 // SAFE TV interference (much reduced amplitude)
-                float horizontalSync = std::sin(2.0f * M_PI * 1000.0f * tvSampleCounter / getSampleRate()) * 0.03f; // Reduced from 0.15f
+                float horizontalSync = std::sin(2.0f * juce::MathConstants<float>::pi * 1000.0f * tvSampleCounter / getSampleRate()) * 0.03f; // Reduced from 0.15f
                 float verticalNoise = (random.nextFloat() - 0.5f) * 0.015f; // Much safer amplitude
                 
                 channelData[sample] += horizontalSync + verticalNoise;
@@ -531,8 +531,8 @@ float TestAudioProcessor::applyPhoneDistortion(float input, PhoneType phoneType,
             // MUCH LESS quantization noise (was too buzzy!)
             if (amount > 0.3f) // FIXED: Only add at higher settings
             {
-                float quantizationNoise = (random.nextFloat() * 2.0f - 1.0f) * 0.001f * amount; // FIXED: Much quieter
-                clipped += quantizationNoise;
+                float localQuantizationNoise = (random.nextFloat() * 2.0f - 1.0f) * 0.001f * amount; // FIXED: Much quieter
+                clipped += localQuantizationNoise;
             }
             
             // MUCH SUBTLER digital artifacts
