@@ -45,8 +45,8 @@ jobs:
       if: matrix.os == 'macos-latest'
       run: |
         cd Builds/MacOSX
-        xcodebuild -project test.xcodeproj -scheme "test - AU" -configuration Release -allowProvisioningUpdates
-        xcodebuild -project test.xcodeproj -scheme "test - VST3" -configuration Release -allowProvisioningUpdates || echo "VST3 build failed, continuing with AU only"
+        xcodebuild -project Cellyz.xcodeproj -scheme "Cellyz - AU" -configuration Release -allowProvisioningUpdates
+        xcodebuild -project Cellyz.xcodeproj -scheme "Cellyz - VST3" -configuration Release -allowProvisioningUpdates || echo "VST3 build failed, continuing with AU only"
 
     - name: Setup MSBuild (Windows)
       if: matrix.os == 'windows-latest'
@@ -65,36 +65,45 @@ jobs:
         if [ "$RUNNER_OS" == "macOS" ]; then
           echo "Collecting macOS artifacts..."
           find Builds/MacOSX -name "*.component" -o -name "*.vst3" | head -10
+          if [ -d "Builds/MacOSX/build/Release/Cellyz.component" ]; then
+            cp -r "Builds/MacOSX/build/Release/Cellyz.component" artifacts/
+            echo "✓ Copied AU plugin"
+          fi
+          if [ -d "Builds/MacOSX/build/Release/Cellyz.vst3" ]; then
+            cp -r "Builds/MacOSX/build/Release/Cellyz.vst3" artifacts/
+            echo "✓ Copied VST3 plugin"
+          fi
+          # Also check for test.* plugins in case they exist
           if [ -d "Builds/MacOSX/build/Release/test.component" ]; then
             cp -r "Builds/MacOSX/build/Release/test.component" artifacts/
-            echo "✓ Copied AU plugin"
+            echo "✓ Copied test AU plugin"
           fi
           if [ -d "Builds/MacOSX/build/Release/test.vst3" ]; then
             cp -r "Builds/MacOSX/build/Release/test.vst3" artifacts/
-            echo "✓ Copied VST3 plugin"
+            echo "✓ Copied test VST3 plugin"
           fi
-                  else
-            echo "Collecting Windows artifacts..."
-            find Builds/Windows -name "*.dll" -o -name "*.vst3" | head -10
-            # Check multiple possible locations for Windows build output
-            if [ -d "Builds/Windows/x64/Release/VST3/Cellyz.vst3" ]; then
-              cp -r "Builds/Windows/x64/Release/VST3/Cellyz.vst3" artifacts/
-              echo "✓ Copied VST3 plugin from x64/Release/VST3/"
-            elif [ -d "Builds/Windows/x64/Release/Cellyz.vst3" ]; then
-              cp -r "Builds/Windows/x64/Release/Cellyz.vst3" artifacts/
-              echo "✓ Copied VST3 plugin from x64/Release/"
-            elif [ -f "Builds/Windows/x64/Release/VST3/Cellyz.dll" ]; then
-              mkdir -p artifacts/Cellyz.vst3/Contents/x86_64-win
-              cp "Builds/Windows/x64/Release/VST3/Cellyz.dll" artifacts/Cellyz.vst3/Contents/x86_64-win/
-              echo "✓ Created VST3 bundle from DLL"
-            else
-              echo "⚠️ VST3 not found, searching all build outputs:"
-              find Builds/Windows -type f -name "*.dll" -o -name "*.vst3" -o -name "Cellyz*"
-            fi
-            
-            # Windows installer is built by separate Inno Setup action
-            echo "Windows VST3 ready for installer (built separately)"
+        else
+          echo "Collecting Windows artifacts..."
+          find Builds/Windows -name "*.dll" -o -name "*.vst3" | head -10
+          # Check multiple possible locations for Windows build output
+          if [ -d "Builds/Windows/x64/Release/VST3/Cellyz.vst3" ]; then
+            cp -r "Builds/Windows/x64/Release/VST3/Cellyz.vst3" artifacts/
+            echo "✓ Copied VST3 plugin from x64/Release/VST3/"
+          elif [ -d "Builds/Windows/x64/Release/Cellyz.vst3" ]; then
+            cp -r "Builds/Windows/x64/Release/Cellyz.vst3" artifacts/
+            echo "✓ Copied VST3 plugin from x64/Release/"
+          elif [ -f "Builds/Windows/x64/Release/VST3/Cellyz.dll" ]; then
+            mkdir -p artifacts/Cellyz.vst3/Contents/x86_64-win
+            cp "Builds/Windows/x64/Release/VST3/Cellyz.dll" artifacts/Cellyz.vst3/Contents/x86_64-win/
+            echo "✓ Created VST3 bundle from DLL"
+          else
+            echo "⚠️ VST3 not found, searching all build outputs:"
+            find Builds/Windows -type f -name "*.dll" -o -name "*.vst3" -o -name "Cellyz*"
           fi
+          
+          # Windows installer is built by separate Inno Setup action
+          echo "Windows VST3 ready for installer (built separately)"
+        fi
         
         # List final artifacts
         echo "Final artifacts:"
