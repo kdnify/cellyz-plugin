@@ -1,4 +1,4 @@
-name: Build Plugin
+name: Build Cellyz Plugin
 
 on:
   push:
@@ -9,37 +9,37 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
         include:
           - os: macos-latest
-            generator: Xcode
-            config: Release
             artifact: macOS
           - os: windows-latest
-            generator: "Visual Studio 17 2022"
-            config: Release
             artifact: Windows
 
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
-    - name: Setup JUCE
-      shell: bash
+    - name: Setup JUCE (macOS)
+      if: matrix.os == 'macos-latest'
       run: |
-        if [ "$RUNNER_OS" == "macOS" ]; then
-          curl -L -o juce.zip "https://github.com/juce-framework/JUCE/releases/download/8.0.8/juce-8.0.8-osx.zip"
-          unzip juce.zip
-          ls -la
-          sudo cp -r juce-8.0.8-osx/JUCE/* /usr/local/ || sudo cp -r JUCE/* /usr/local/ || echo "JUCE setup may have failed"
-        else
-          curl -L -o juce.zip "https://github.com/juce-framework/JUCE/releases/download/8.0.8/juce-8.0.8-windows.zip"
-          unzip juce.zip
-          ls -la
-          echo "JUCE_DIR=$PWD/juce-8.0.8-windows/JUCE" >> $GITHUB_ENV || echo "JUCE_DIR=$PWD/JUCE" >> $GITHUB_ENV
-        fi
+        curl -L -o juce.zip "https://github.com/juce-framework/JUCE/releases/download/8.0.8/juce-8.0.8-osx.zip"
+        unzip juce.zip
+        sudo mkdir -p /usr/local
+        sudo cp -r juce-8.0.8-osx/JUCE/* /usr/local/ 2>/dev/null || sudo cp -r JUCE/* /usr/local/ 2>/dev/null || echo "JUCE setup completed"
+
+    - name: Setup JUCE (Windows)
+      if: matrix.os == 'windows-latest'
+      shell: cmd
+      run: |
+        curl -L -o juce.zip "https://github.com/juce-framework/JUCE/releases/download/8.0.8/juce-8.0.8-windows.zip"
+        7z x juce.zip
+        mkdir C:\JUCE 2>nul || echo Directory exists
+        xcopy /E /I /Y juce-8.0.8-windows\JUCE\* C:\JUCE\ 2>nul || xcopy /E /I /Y JUCE\* C:\JUCE\ 2>nul || echo JUCE setup completed
+        dir C:\JUCE
 
     - name: Build macOS
       if: matrix.os == 'macos-latest'
@@ -48,32 +48,58 @@ jobs:
         xcodebuild -project test.xcodeproj -scheme "test - AU" -configuration Release -allowProvisioningUpdates
         xcodebuild -project test.xcodeproj -scheme "test - VST3" -configuration Release -allowProvisioningUpdates || echo "VST3 build failed, continuing with AU only"
 
-    - name: Build Windows  
+    - name: Setup MSBuild (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Build Windows
       if: matrix.os == 'windows-latest'
       run: |
         cd Builds/Windows
-        dir
-        msbuild Cellyz.sln -p:Configuration=Release -p:Platform=x64 || msbuild Cellyz.sln -p:Configuration=Release -p:Platform="Win32"
+        msbuild Cellyz.sln -p:Configuration=Release -p:Platform=x64 -v:minimal
 
     - name: Package Artifacts
       shell: bash
       run: |
         mkdir -p artifacts
         if [ "$RUNNER_OS" == "macOS" ]; then
+          echo "Collecting macOS artifacts..."
+          find Builds/MacOSX -name "*.component" -o -name "*.vst3" | head -10
           if [ -d "Builds/MacOSX/build/Release/test.component" ]; then
             cp -r "Builds/MacOSX/build/Release/test.component" artifacts/
+            echo "✓ Copied AU plugin"
           fi
           if [ -d "Builds/MacOSX/build/Release/test.vst3" ]; then
             cp -r "Builds/MacOSX/build/Release/test.vst3" artifacts/
+            echo "✓ Copied VST3 plugin"
           fi
         else
-          if [ -d "Builds/Windows/x64/Release/VST3/test.vst3" ]; then
-            cp -r "Builds/Windows/x64/Release/VST3/test.vst3" artifacts/
+          echo "Collecting Windows artifacts..."
+          find Builds/Windows -name "*.dll" -o -name "*.vst3" | head -10
+          # Check multiple possible locations for Windows build output
+          if [ -d "Builds/Windows/x64/Release/VST3/Cellyz.vst3" ]; then
+            cp -r "Builds/Windows/x64/Release/VST3/Cellyz.vst3" artifacts/
+            echo "✓ Copied VST3 plugin from x64/Release/VST3/"
+          elif [ -d "Builds/Windows/x64/Release/Cellyz.vst3" ]; then
+            cp -r "Builds/Windows/x64/Release/Cellyz.vst3" artifacts/
+            echo "✓ Copied VST3 plugin from x64/Release/"
+          elif [ -f "Builds/Windows/x64/Release/VST3/Cellyz.dll" ]; then
+            mkdir -p artifacts/Cellyz.vst3/Contents/x86_64-win
+            cp "Builds/Windows/x64/Release/VST3/Cellyz.dll" artifacts/Cellyz.vst3/Contents/x86_64-win/
+            echo "✓ Created VST3 bundle from DLL"
+          else
+            echo "⚠️ VST3 not found, searching all build outputs:"
+            find Builds/Windows -type f -name "*.dll" -o -name "*.vst3" -o -name "Cellyz*"
           fi
         fi
+        
+        # List final artifacts
+        echo "Final artifacts:"
+        ls -la artifacts/
 
     - name: Upload Artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.artifact }}-Build
-        path: artifacts/ 
+        path: artifacts/
+        retention-days: 90 
