@@ -42,15 +42,23 @@ jobs:
         fi
         
         echo "Installing JUCE from: $JUCE_DIR"
-        sudo mkdir -p /usr/local/juce
-        sudo cp -r "$JUCE_DIR"/* /usr/local/juce/
         
-        # Verify installation
-        echo "JUCE installation:"
-        ls -la /usr/local/juce/
+        # Install JUCE to the hardcoded path the Xcode project expects
+        sudo mkdir -p /Users/khaydien/Downloads/JUCE
+        sudo cp -r "$JUCE_DIR"/* /Users/khaydien/Downloads/JUCE/
+        
+        # Also install JUCE modules to the project-relative path
+        mkdir -p JuceLibraryCode/modules
+        cp -r "$JUCE_DIR/modules"/* JuceLibraryCode/modules/
+        
+        # Verify installations
+        echo "JUCE installation (hardcoded path):"
+        ls -la /Users/khaydien/Downloads/JUCE/modules/ | head -5
+        echo "JUCE installation (project path):"
+        ls -la JuceLibraryCode/modules/ | head -5
         
         # Set JUCE_PATH for the build
-        echo "JUCE_PATH=/usr/local/juce" >> $GITHUB_ENV
+        echo "JUCE_PATH=/Users/khaydien/Downloads/JUCE" >> $GITHUB_ENV
 
     - name: Setup JUCE (Windows)
       if: matrix.os == 'windows-latest'
