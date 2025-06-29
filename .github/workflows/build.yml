@@ -123,12 +123,31 @@ jobs:
           fi
           
         else
-          echo "Windows build - installer will be handled by Inno Setup"
-          # Don't collect anything here - let Inno Setup handle it
+          echo "Windows build - preparing VST3 for Inno Setup..."
+          
+          # Create artifacts directory for Inno Setup to find the VST3
+          echo "Looking for built VST3..."
+          find Builds/Windows -name "*.vst3" -type d | head -5
+          
+          # Copy VST3 to artifacts so Inno Setup can find it
+          if [ -d "Builds/Windows/x64/Release/VST3/Cellyz.vst3" ]; then
+            cp -r "Builds/Windows/x64/Release/VST3/Cellyz.vst3" artifacts/
+            echo "✅ Copied VST3 plugin for Inno Setup: x64/Release/VST3/"
+          elif [ -d "Builds/Windows/x64/Release/Cellyz.vst3" ]; then
+            cp -r "Builds/Windows/x64/Release/Cellyz.vst3" artifacts/
+            echo "✅ Copied VST3 plugin for Inno Setup: x64/Release/"
+          elif [ -f "Builds/Windows/x64/Release/VST3/Cellyz.dll" ]; then
+            mkdir -p artifacts/Cellyz.vst3/Contents/x86_64-win
+            cp "Builds/Windows/x64/Release/VST3/Cellyz.dll" artifacts/Cellyz.vst3/Contents/x86_64-win/
+            echo "✅ Created VST3 bundle for Inno Setup from DLL"
+          else
+            echo "❌ VST3 not found, searching all build outputs:"
+            find Builds/Windows -type f -name "*.dll" -o -name "*.vst3" -o -name "Cellyz*"
+          fi
+          
+          echo "VST3 ready for Inno Setup packaging:"
+          ls -la artifacts/
         fi
-        
-        echo "Current artifacts:"
-        ls -la artifacts/
 
     - name: Build Windows Installer (Windows)
       if: matrix.os == 'windows-latest'
@@ -143,9 +162,6 @@ jobs:
       run: |
         echo "Collecting ONLY the Windows installer (.exe)..."
         
-        # Make sure artifacts directory exists
-        mkdir -p artifacts
-        
         # Find and collect ONLY the .exe installer (not VST3 files)
         if [ -f "installer/Cellyz_Phone_FX_v1.0_Setup.exe" ]; then
           cp "installer/Cellyz_Phone_FX_v1.0_Setup.exe" artifacts/
@@ -159,18 +175,18 @@ jobs:
           find . -name "*Cellyz*.exe" -type f 2>/dev/null | head -5
         fi
         
+        # Remove the VST3 files that were needed for Inno Setup but shouldn't be in final artifacts
+        echo "Cleaning up VST3 files (keeping only .exe installer)..."
+        find artifacts -name "*.vst3" -type d -exec rm -rf {} + 2>/dev/null || true
+        find artifacts -name "*.dll" -type f -delete 2>/dev/null || true
+        
         # Verify we ONLY have the installer
         echo "Final Windows artifacts (should only be .exe):"
         ls -la artifacts/
         
-        # Double-check no VST3 files were accidentally included
-        vst3_count=$(find artifacts -name "*.vst3" -o -name "*.dll" 2>/dev/null | wc -l)
-        if [ "$vst3_count" -gt 0 ]; then
-          echo "⚠️ WARNING: Found $vst3_count VST3/DLL files in artifacts - removing them"
-          find artifacts -name "*.vst3" -o -name "*.dll" -delete 2>/dev/null
-          echo "Cleaned artifacts:"
-          ls -la artifacts/
-        fi
+        # Final verification
+        file_count=$(ls -1 artifacts/ 2>/dev/null | wc -l)
+        echo "Final artifact count: $file_count (should be 1)"
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
