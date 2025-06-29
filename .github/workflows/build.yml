@@ -92,50 +92,111 @@ jobs:
       run: |
         mkdir -p artifacts
         if [ "$RUNNER_OS" == "macOS" ]; then
-          echo "Collecting macOS artifacts..."
-          find Builds/MacOSX -name "*.component" -o -name "*.vst3" | head -10
-          # Look for both test.* and Cellyz.* plugins (naming inconsistency)
+          echo "Creating macOS .pkg installer..."
+          
+          # Create temporary installer structure
+          mkdir -p installer_temp/AU
+          mkdir -p installer_temp/VST3
+          
+          # Copy built plugins to installer structure
           if [ -d "Builds/MacOSX/build/Release/test.component" ]; then
-            cp -r "Builds/MacOSX/build/Release/test.component" artifacts/
-            echo "✓ Copied test AU plugin"
+            cp -r "Builds/MacOSX/build/Release/test.component" installer_temp/AU/
+            echo "✓ Found AU plugin"
           fi
           if [ -d "Builds/MacOSX/build/Release/test.vst3" ]; then
-            cp -r "Builds/MacOSX/build/Release/test.vst3" artifacts/
-            echo "✓ Copied test VST3 plugin"
-          fi
-          if [ -d "Builds/MacOSX/build/Release/Cellyz.component" ]; then
-            cp -r "Builds/MacOSX/build/Release/Cellyz.component" artifacts/
-            echo "✓ Copied Cellyz AU plugin"
-          fi
-          if [ -d "Builds/MacOSX/build/Release/Cellyz.vst3" ]; then
-            cp -r "Builds/MacOSX/build/Release/Cellyz.vst3" artifacts/
-            echo "✓ Copied Cellyz VST3 plugin"
-          fi
-        else
-          echo "Collecting Windows artifacts..."
-          find Builds/Windows -name "*.dll" -o -name "*.vst3" | head -10
-          # Check multiple possible locations for Windows build output
-          if [ -d "Builds/Windows/x64/Release/VST3/Cellyz.vst3" ]; then
-            cp -r "Builds/Windows/x64/Release/VST3/Cellyz.vst3" artifacts/
-            echo "✓ Copied VST3 plugin from x64/Release/VST3/"
-          elif [ -d "Builds/Windows/x64/Release/Cellyz.vst3" ]; then
-            cp -r "Builds/Windows/x64/Release/Cellyz.vst3" artifacts/
-            echo "✓ Copied VST3 plugin from x64/Release/"
-          elif [ -f "Builds/Windows/x64/Release/VST3/Cellyz.dll" ]; then
-            mkdir -p artifacts/Cellyz.vst3/Contents/x86_64-win
-            cp "Builds/Windows/x64/Release/VST3/Cellyz.dll" artifacts/Cellyz.vst3/Contents/x86_64-win/
-            echo "✓ Created VST3 bundle from DLL"
-          else
-            echo "⚠️ VST3 not found, searching all build outputs:"
-            find Builds/Windows -type f -name "*.dll" -o -name "*.vst3" -o -name "Cellyz*"
+            cp -r "Builds/MacOSX/build/Release/test.vst3" installer_temp/VST3/
+            echo "✓ Found VST3 plugin"
           fi
           
-          # Windows installer is built by separate Inno Setup action
-          echo "Windows VST3 ready for installer (built separately)"
+          # Create .pkg installer using pkgbuild and productbuild
+          echo "Building macOS installer package..."
+          
+          # Create component packages
+          if [ -d "installer_temp/AU/test.component" ]; then
+            pkgbuild --root installer_temp/AU \
+                     --identifier com.cellyz.au \
+                     --version 1.0 \
+                     --install-location "/Library/Audio/Plug-Ins/Components" \
+                     AU.pkg
+          fi
+          
+          if [ -d "installer_temp/VST3/test.vst3" ]; then
+            pkgbuild --root installer_temp/VST3 \
+                     --identifier com.cellyz.vst3 \
+                     --version 1.0 \
+                     --install-location "/Library/Audio/Plug-Ins/VST3" \
+                     VST3.pkg
+          fi
+          
+          # Create distribution XML for combined installer
+          cat > Distribution.xml << 'DISTXML'
+        <?xml version="1.0" encoding="utf-8"?>
+        <installer-gui-script minSpecVersion="1">
+            <title>Cellyz Phone FX</title>
+            <organization>Cellyz Audio</organization>
+            <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+            <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+            
+            <welcome file="welcome.txt"/>
+            <conclusion file="conclusion.txt"/>
+            
+            <choices-outline>
+                <line choice="default">
+                    <line choice="au"/>
+                    <line choice="vst3"/>
+                </line>
+            </choices-outline>
+            
+            <choice id="default"/>
+            <choice id="au" visible="false">
+                <pkg-ref id="com.cellyz.au"/>
+            </choice>
+            <choice id="vst3" visible="false">
+                <pkg-ref id="com.cellyz.vst3"/>
+            </choice>
+            
+            <pkg-ref id="com.cellyz.au" version="1.0" auth="root">AU.pkg</pkg-ref>
+            <pkg-ref id="com.cellyz.vst3" version="1.0" auth="root">VST3.pkg</pkg-ref>
+        </installer-gui-script>
+        DISTXML
+          
+          # Create welcome text
+          cat > welcome.txt << 'WELCOME'
+        Welcome to Cellyz Phone FX v1.0
+
+        This installer will install the Cellyz Phone FX audio plugin with authentic phone call simulation effects.
+
+        • Nokia phone simulation
+        • iPhone phone simulation  
+        • Sony Ericsson phone simulation
+
+        The plugin will be installed as both AU and VST3 formats for maximum DAW compatibility.
+        WELCOME
+
+          # Create conclusion text  
+          cat > conclusion.txt << 'CONCLUSION'
+        Cellyz Phone FX has been successfully installed!
+
+        You can now use the plugin in your favorite DAW:
+        • AU Component: /Library/Audio/Plug-Ins/Components/
+        • VST3 Plugin: /Library/Audio/Plug-Ins/VST3/
+
+        Thank you for using Cellyz Audio products!
+        CONCLUSION
+          
+          # Build the final .pkg installer
+          productbuild --distribution Distribution.xml \
+                       --package-path . \
+                       artifacts/Cellyz_Phone_FX_v1.0.pkg
+          
+          echo "✅ Created Cellyz_Phone_FX_v1.0.pkg"
+          
+        else
+          echo "Collecting Windows installer..."
+          echo "Windows installer will be collected after Inno Setup builds it"
         fi
         
-        # List final artifacts
-        echo "Final artifacts:"
+        echo "Artifacts so far:"
         ls -la artifacts/
 
     - name: Build Windows Installer (Windows)
@@ -149,27 +210,27 @@ jobs:
       if: matrix.os == 'windows-latest'
       shell: bash
       run: |
-        echo "Looking for compiled installer..."
-        find . -name "*.exe" -type f | grep -i setup || echo "No setup.exe found"
-        find . -name "*Cellyz*.exe" -type f || echo "No Cellyz exe found"
-        # The Inno Setup action typically outputs to the installer directory or project root
+        echo "Collecting Windows installer..."
+        
+        # Find the compiled installer (Inno Setup creates it)
         if [ -f "installer/Cellyz_Phone_FX_v1.0_Setup.exe" ]; then
           cp "installer/Cellyz_Phone_FX_v1.0_Setup.exe" artifacts/
-          echo "✓ Found installer in installer directory"
+          echo "✅ Found Windows installer in installer directory"
         elif [ -f "Cellyz_Phone_FX_v1.0_Setup.exe" ]; then
           cp "Cellyz_Phone_FX_v1.0_Setup.exe" artifacts/
-          echo "✓ Found installer in project root"
+          echo "✅ Found Windows installer in project root"
         else
-          echo "⚠️ Installer not found, listing all exe files:"
-          find . -name "*.exe" -type f || echo "No exe files found"
+          echo "⚠️ Windows installer not found, searching..."
+          find . -name "*Setup*.exe" -type f || echo "No setup exe files found"
+          find . -name "*Cellyz*.exe" -type f || echo "No Cellyz exe files found"
         fi
         
-        echo "Final artifacts with installer:"
+        echo "Final artifacts:"
         ls -la artifacts/
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.artifact }}-Build
+        name: Cellyz-Phone-FX-${{ matrix.artifact }}
         path: artifacts/
         retention-days: 90 
