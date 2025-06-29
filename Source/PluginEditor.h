@@ -191,6 +191,7 @@ private:
     // Legacy labels (may remove)
     juce::Label interferenceLabel;
     juce::Label interferenceButtonLabel;
+    juce::Label ghostlineAudioLabel;        // NEW: Ghostline Audio branding
 
     // Parameter Attachments for DAW automation
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> lowCutAttachment;

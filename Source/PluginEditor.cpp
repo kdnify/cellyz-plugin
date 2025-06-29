@@ -205,11 +205,18 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     interferenceButtonLabel.setFont(juce::Font(12.0f));
     addAndMakeVisible(interferenceButtonLabel);
     
+    // NEW: Ghostline Audio branding label  
+    ghostlineAudioLabel.setText("Ghostline Audio", juce::dontSendNotification);
+    ghostlineAudioLabel.setJustificationType(juce::Justification::centredRight);
+    ghostlineAudioLabel.setColour(juce::Label::textColourId, juce::Colour(0xff888888)); // Subtle grey
+    ghostlineAudioLabel.setFont(juce::Font(10.0f, juce::Font::italic));
+    addAndMakeVisible(ghostlineAudioLabel);
+    
     // Set Nokia as initially selected
     nokiaButton.setToggleState(true, juce::dontSendNotification);
     
     // Initialize animated screen state
-    screenState.scrollingText = "RETROCELL 3300 - Phone Effect Active";
+    screenState.scrollingText = "Cellyz - Phone Effect Active";
     screenState.textScrollPosition = 0.0f;
     screenState.signalBars = 4;
     screenState.batteryLevel = 85;
@@ -369,12 +376,16 @@ void TestAudioProcessorEditor::resized()
     interferenceButton.setBounds(errorButtonX, errorButtonY, 60, 25);
     interferenceButtonLabel.setBounds(errorButtonX - 20, errorButtonY + 27, 100, 15);
     
-    // Position phone buttons at bottom (fixed positions)
+    // Position phone buttons at bottom (fixed positions)  
     buttonArea = buttonArea.reduced(10);
     auto buttonWidth = buttonArea.getWidth() / 3;
     nokiaButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(2));
     iphoneButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(2));
     sonyButton.setBounds(buttonArea.reduced(2));
+    
+    // Position Ghostline Audio branding in bottom right corner
+    auto brandingArea = getLocalBounds().removeFromBottom(20).removeFromRight(120);
+    ghostlineAudioLabel.setBounds(brandingArea);
 }
 
 //==============================================================================
@@ -412,7 +423,7 @@ void TestAudioProcessorEditor::buttonClicked (juce::Button* button)
         repaint(); // Refresh knob styling
         
         // Update screen content for Nokia
-        screenState.scrollingText = "RETROCELL 3300 - Classic GSM Phone";
+        screenState.scrollingText = "Cellyz - RetroCell 3300 - Classic GSM Phone";
         screenState.signalBars = 4;
         screenState.batteryLevel = 85;
         screenState.isInCall = false;
@@ -1459,17 +1470,17 @@ void TestAudioProcessorEditor::updateAdaptiveTypography()
     {
         case 0: // RetroCell 3300 (Nokia-inspired) - Pixelated retro font
             currentFont = juce::Font("Monaco", 12.0f, juce::Font::bold);
-            titleLabel.setText("RETROCELL PHONE EFFECT", juce::dontSendNotification);
+            titleLabel.setText("Cellyz", juce::dontSendNotification);
             break;
             
         case 1: // TouchPro (iPhone-inspired) - Clean modern font  
             currentFont = juce::Font("SF Pro Display", 12.0f, juce::Font::plain);
-            titleLabel.setText("TouchPro Phone Effect", juce::dontSendNotification);
+            titleLabel.setText("Cellyz", juce::dontSendNotification);
             break;
             
         case 2: // FlipClassic (Sony-inspired) - LCD-style font
             currentFont = juce::Font("Courier New", 12.0f, juce::Font::bold);
-            titleLabel.setText("FLIPCLASSIC PHONE EFFECT", juce::dontSendNotification);
+            titleLabel.setText("Cellyz", juce::dontSendNotification);
             break;
             
         default:
