@@ -94,109 +94,40 @@ jobs:
         if [ "$RUNNER_OS" == "macOS" ]; then
           echo "Creating macOS .pkg installer..."
           
-          # Create temporary installer structure
-          mkdir -p installer_temp/AU
-          mkdir -p installer_temp/VST3
+          # Check what we actually built
+          echo "Checking built plugins:"
+          find Builds/MacOSX/build -name "*.component" -o -name "*.vst3" 2>/dev/null || echo "No plugins found"
           
-          # Copy built plugins to installer structure
+          # Create a simple .pkg using just pkgbuild (simpler approach)
           if [ -d "Builds/MacOSX/build/Release/test.component" ]; then
-            cp -r "Builds/MacOSX/build/Release/test.component" installer_temp/AU/
-            echo "✓ Found AU plugin"
-          fi
-          if [ -d "Builds/MacOSX/build/Release/test.vst3" ]; then
-            cp -r "Builds/MacOSX/build/Release/test.vst3" installer_temp/VST3/
-            echo "✓ Found VST3 plugin"
-          fi
-          
-          # Create .pkg installer using pkgbuild and productbuild
-          echo "Building macOS installer package..."
-          
-          # Create component packages
-          if [ -d "installer_temp/AU/test.component" ]; then
-            pkgbuild --root installer_temp/AU \
-                     --identifier com.cellyz.au \
+            echo "Creating AU installer..."
+            pkgbuild --root "Builds/MacOSX/build/Release" \
+                     --identifier com.cellyz.phonefx \
                      --version 1.0 \
-                     --install-location "/Library/Audio/Plug-Ins/Components" \
-                     AU.pkg
+                     --install-location "/Library/Audio/Plug-Ins" \
+                     --scripts /dev/null \
+                     artifacts/Cellyz_Phone_FX_v1.0.pkg
+            
+            if [ -f "artifacts/Cellyz_Phone_FX_v1.0.pkg" ]; then
+              echo "✅ Successfully created Cellyz_Phone_FX_v1.0.pkg"
+            else
+              echo "❌ Failed to create .pkg installer"
+              # Fallback: create a simple zip for now
+              cd "Builds/MacOSX/build/Release"
+              zip -r "../../../../artifacts/Cellyz_Phone_FX_v1.0_Mac.zip" *.component *.vst3 2>/dev/null || echo "No plugins to zip"
+              cd ../../../../
+            fi
+          else
+            echo "❌ No test.component found for packaging"
+            ls -la Builds/MacOSX/build/Release/ || echo "Release directory not found"
           fi
-          
-          if [ -d "installer_temp/VST3/test.vst3" ]; then
-            pkgbuild --root installer_temp/VST3 \
-                     --identifier com.cellyz.vst3 \
-                     --version 1.0 \
-                     --install-location "/Library/Audio/Plug-Ins/VST3" \
-                     VST3.pkg
-          fi
-          
-          # Create distribution XML for combined installer
-          cat > Distribution.xml << 'DISTXML'
-        <?xml version="1.0" encoding="utf-8"?>
-        <installer-gui-script minSpecVersion="1">
-            <title>Cellyz Phone FX</title>
-            <organization>Cellyz Audio</organization>
-            <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
-            <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
-            
-            <welcome file="welcome.txt"/>
-            <conclusion file="conclusion.txt"/>
-            
-            <choices-outline>
-                <line choice="default">
-                    <line choice="au"/>
-                    <line choice="vst3"/>
-                </line>
-            </choices-outline>
-            
-            <choice id="default"/>
-            <choice id="au" visible="false">
-                <pkg-ref id="com.cellyz.au"/>
-            </choice>
-            <choice id="vst3" visible="false">
-                <pkg-ref id="com.cellyz.vst3"/>
-            </choice>
-            
-            <pkg-ref id="com.cellyz.au" version="1.0" auth="root">AU.pkg</pkg-ref>
-            <pkg-ref id="com.cellyz.vst3" version="1.0" auth="root">VST3.pkg</pkg-ref>
-        </installer-gui-script>
-        DISTXML
-          
-          # Create welcome text
-          cat > welcome.txt << 'WELCOME'
-        Welcome to Cellyz Phone FX v1.0
-
-        This installer will install the Cellyz Phone FX audio plugin with authentic phone call simulation effects.
-
-        • Nokia phone simulation
-        • iPhone phone simulation  
-        • Sony Ericsson phone simulation
-
-        The plugin will be installed as both AU and VST3 formats for maximum DAW compatibility.
-        WELCOME
-
-          # Create conclusion text  
-          cat > conclusion.txt << 'CONCLUSION'
-        Cellyz Phone FX has been successfully installed!
-
-        You can now use the plugin in your favorite DAW:
-        • AU Component: /Library/Audio/Plug-Ins/Components/
-        • VST3 Plugin: /Library/Audio/Plug-Ins/VST3/
-
-        Thank you for using Cellyz Audio products!
-        CONCLUSION
-          
-          # Build the final .pkg installer
-          productbuild --distribution Distribution.xml \
-                       --package-path . \
-                       artifacts/Cellyz_Phone_FX_v1.0.pkg
-          
-          echo "✅ Created Cellyz_Phone_FX_v1.0.pkg"
           
         else
-          echo "Collecting Windows installer..."
-          echo "Windows installer will be collected after Inno Setup builds it"
+          echo "Windows build - installer will be handled by Inno Setup"
+          # Don't collect anything here - let Inno Setup handle it
         fi
         
-        echo "Artifacts so far:"
+        echo "Current artifacts:"
         ls -la artifacts/
 
     - name: Build Windows Installer (Windows)
@@ -210,9 +141,12 @@ jobs:
       if: matrix.os == 'windows-latest'
       shell: bash
       run: |
-        echo "Collecting Windows installer..."
+        echo "Collecting ONLY the Windows installer (.exe)..."
         
-        # Find the compiled installer (Inno Setup creates it)
+        # Make sure artifacts directory exists
+        mkdir -p artifacts
+        
+        # Find and collect ONLY the .exe installer (not VST3 files)
         if [ -f "installer/Cellyz_Phone_FX_v1.0_Setup.exe" ]; then
           cp "installer/Cellyz_Phone_FX_v1.0_Setup.exe" artifacts/
           echo "✅ Found Windows installer in installer directory"
@@ -220,13 +154,23 @@ jobs:
           cp "Cellyz_Phone_FX_v1.0_Setup.exe" artifacts/
           echo "✅ Found Windows installer in project root"
         else
-          echo "⚠️ Windows installer not found, searching..."
-          find . -name "*Setup*.exe" -type f || echo "No setup exe files found"
-          find . -name "*Cellyz*.exe" -type f || echo "No Cellyz exe files found"
+          echo "❌ Windows installer not found, searching..."
+          find . -name "*Setup*.exe" -type f 2>/dev/null | head -5
+          find . -name "*Cellyz*.exe" -type f 2>/dev/null | head -5
         fi
         
-        echo "Final artifacts:"
+        # Verify we ONLY have the installer
+        echo "Final Windows artifacts (should only be .exe):"
         ls -la artifacts/
+        
+        # Double-check no VST3 files were accidentally included
+        vst3_count=$(find artifacts -name "*.vst3" -o -name "*.dll" 2>/dev/null | wc -l)
+        if [ "$vst3_count" -gt 0 ]; then
+          echo "⚠️ WARNING: Found $vst3_count VST3/DLL files in artifacts - removing them"
+          find artifacts -name "*.vst3" -o -name "*.dll" -delete 2>/dev/null
+          echo "Cleaned artifacts:"
+          ls -la artifacts/
+        fi
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
