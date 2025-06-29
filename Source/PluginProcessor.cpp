@@ -7,10 +7,10 @@ const juce::String TestAudioProcessor::LOW_CUT_ID = "lowCut";
 const juce::String TestAudioProcessor::HIGH_CUT_ID = "highCut";
 const juce::String TestAudioProcessor::DISTORTION_ID = "distortion";
 const juce::String TestAudioProcessor::PHONE_TYPE_ID = "phoneType";
-const juce::String TestAudioProcessor::NOISE_LEVEL_ID = "noiseLevel";
 const juce::String TestAudioProcessor::INTERFERENCE_ID = "interference";
 const juce::String TestAudioProcessor::COMPRESSION_ID = "compression";
 const juce::String TestAudioProcessor::TV_INTERFERENCE_ID = "tvInterference";  // NEW: TV interference toggle
+const juce::String TestAudioProcessor::WET_DRY_MIX_ID = "wetDryMix";          // NEW: Wet/Dry mix - THE MISSING PIECE!
 
 // NEW: Simplified interference preset system
 const juce::String TestAudioProcessor::INTERFERENCE_PRESET_ID = "interferencePreset";
@@ -42,10 +42,10 @@ TestAudioProcessor::TestAudioProcessor()
     highCutParam = apvts.getRawParameterValue(HIGH_CUT_ID);
     distortionParam = apvts.getRawParameterValue(DISTORTION_ID);
     phoneTypeParam = apvts.getRawParameterValue(PHONE_TYPE_ID);
-    noiseLevelParam = apvts.getRawParameterValue(NOISE_LEVEL_ID);
     interferenceParam = apvts.getRawParameterValue(INTERFERENCE_ID);
     compressionParam = apvts.getRawParameterValue(COMPRESSION_ID);
     tvInterferenceParam = apvts.getRawParameterValue(TV_INTERFERENCE_ID);  // NEW: TV interference toggle
+    wetDryMixParam = apvts.getRawParameterValue(WET_DRY_MIX_ID);          // NEW: Wet/Dry mix - THE MISSING PIECE!
     
     // NEW: Simplified interference preset parameter
     interferencePresetParam = apvts.getRawParameterValue(INTERFERENCE_PRESET_ID);
@@ -134,14 +134,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout TestAudioProcessor::createPa
         juce::NormalisableRange<float>(0.0f, 2.0f, 1.0f), 0.0f
     ));
     
-    // Background Noise Level (0% - 100%)
-    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
-        NOISE_LEVEL_ID, "Noise Level",
-        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.0f,
-        juce::String(), juce::AudioProcessorParameter::genericParameter,
-        [](float value, int) { return juce::String(static_cast<int>(value * 100)) + " %"; }
-    ));
-    
     // Interference/Artifacts (0% - 100%)
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
         INTERFERENCE_ID, "Interference",
@@ -166,7 +158,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout TestAudioProcessor::createPa
         [](float value, int) { return value > 0.5f ? "ON" : "OFF"; }
     ));
     
-    // REMOVED: Old interference preset parameter (replaced with Signal Quality Choice)
+    // NEW: Wet/Dry Mix (0% = Dry/Original, 100% = Wet/Phone Effect) - THE MISSING PIECE!
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
+        WET_DRY_MIX_ID, "Wet/Dry Mix",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f, // Default to 100% wet (full phone effect)
+        juce::String(), juce::AudioProcessorParameter::genericParameter,
+        [](float value, int) { return juce::String(static_cast<int>(value * 100)) + " %"; }
+    ));
     
     // PHASE 5: Advanced Audio Processing Parameters
     
@@ -348,137 +346,131 @@ bool TestAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
 }
 #endif
 
-void TestAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+void TestAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
-    juce::ignoreUnused (midiMessages);
-
     juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
+    auto totalNumInputChannels = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
+    // Clear unused output channels
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
-    
-    // Update parameter smoothing for professional transitions
-    updateParameterSmoothing();
+        buffer.clear(i, 0, buffer.getNumSamples());
 
-    // Update filter coefficients - Convert discrete indices to actual frequencies
-    auto lowCutIndex = static_cast<int>(lowCutParam->load());
-    auto highCutIndex = static_cast<int>(highCutParam->load());
-    
-    // Create audio block for DSP processing
+    if (totalNumInputChannels == 0)
+        return;
+
+    // Get current parameter values
+    float lowCutFreq = lowCutParam->load();
+    float highCutFreq = highCutParam->load();
+    float distortionLevel = distortionParam->load();
+    float interferenceLevel = interferenceParam->load();
+    float compressionLevel = compressionParam->load();
+    bool tvInterferenceOn = tvInterferenceParam->load() > 0.5f;
+    float wetDryMix = wetDryMixParam->load(); // NEW: Wet/Dry mix - THE MISSING PIECE!
+
+    // PHASE 1: Store original signal for wet/dry mixing
+    juce::AudioBuffer<float> originalBuffer;
+    originalBuffer.makeCopyOf(buffer); // Store clean input signal
+
+    // PHASE 2: Apply filters (low-cut and high-cut)
     juce::dsp::AudioBlock<float> block(buffer);
     juce::dsp::ProcessContextReplacing<float> context(block);
-    
-    // Apply filters only if not "Off" (index 0)
-    if (lowCutIndex > 0)
-    {
-        // Convert index to frequency
-        float lowCutFreq = getLowCutFrequency(lowCutIndex);
-        // High-pass filter (low cut)
-        *lowCutFilter.state = *juce::dsp::IIR::Coefficients<float>::makeHighPass(
-            currentSampleRate, lowCutFreq, 0.707f);
+
+    // Low-cut filter
+    if (lowCutFreq > 20.0f) {
+        auto lowCutCoeffs = juce::dsp::IIR::Coefficients<float>::makeHighPass(getSampleRate(), lowCutFreq);
+        lowCutFilter.state = *lowCutCoeffs;
         lowCutFilter.process(context);
     }
-    
-    if (highCutIndex > 0)
-    {
-        // Convert index to frequency
-        float highCutFreq = getHighCutFrequency(highCutIndex);
-        // Low-pass filter (high cut)  
-        *highCutFilter.state = *juce::dsp::IIR::Coefficients<float>::makeLowPass(
-            currentSampleRate, highCutFreq, 0.707f);
+
+    // High-cut filter
+    if (highCutFreq < 20000.0f) {
+        auto highCutCoeffs = juce::dsp::IIR::Coefficients<float>::makeLowPass(getSampleRate(), highCutFreq);
+        highCutFilter.state = *highCutCoeffs;
         highCutFilter.process(context);
     }
-    
-    // Get current parameter values
-    auto phoneType = static_cast<PhoneType>(static_cast<int>(phoneTypeParam->load()));
-    auto distortionAmount = distortionParam->load();
-    auto noiseLevel = noiseLevelParam->load();
-    auto interferenceLevel = interferenceParam->load();
-    auto compressionLevel = compressionParam->load();
-    auto interferencePreset = static_cast<int>(interferencePresetParam->load());
-    auto tvInterferenceLevel = tvInterferenceParam->load();  // NEW: TV interference toggle
-    
-    // PHASE 5: Advanced Audio Processing Parameters
-    auto codecType = static_cast<CodecType>(static_cast<int>(codecTypeParam->load()));
-    auto packetLoss = packetLossParam->load();
-    auto callPosition = static_cast<CallPosition>(static_cast<int>(callPositionParam->load()));
-    auto ambienceType = static_cast<AmbienceType>(static_cast<int>(ambienceTypeParam->load()));
-    auto ambienceLevel = ambienceLevelParam->load();
-    
-    // Generate background ambience first (affects entire buffer)
-    if (ambienceLevel > 0.0f && ambienceType != Silent)
-    {
-        generateBackgroundAmbience(buffer, ambienceType, ambienceLevel);
-    }
-    
-    // Apply phone-specific processing with authentic interference
-    for (int channel = 0; channel < totalNumOutputChannels; ++channel)
-    {
-        auto* channelData = buffer.getWritePointer(channel);
-        
-        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
-        {
-            auto input = channelData[sample];
-            
-            // Apply phone-specific tonal coloring FIRST (authentic sound character)
-            // TEMPORARILY DISABLED: Testing if this contributes to buzzy sound
-            // input = applyPhoneTonalColor(input, phoneType, tonalColoringIntensity);
-            
-            // GAME-CHANGING: Dynamic Signal Strength System (replaces old interference)
-            detectVoiceActivity(std::abs(input));
-            
-            // Update signal strength based on voice activity and phone type  
-            updateSignalStrength(std::abs(input));
-            
-            // Apply intelligent signal quality simulation
-            input = applySignalQuality(input, phoneType, static_cast<SignalQuality>(interferencePreset));
-            
-            // Apply smart compression that adapts to signal strength
-            if (compressionLevel > 0.0f)
-            {
-                input = applySmartCompression(input, currentSignalStrength);
+
+    // PHASE 3: Apply non-linear distortion/saturation
+    if (distortionLevel > 0.01f) {
+        for (int channel = 0; channel < totalNumInputChannels; ++channel) {
+            auto* channelData = buffer.getWritePointer(channel);
+            for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
+                float input = channelData[sample];
+                
+                // Tanh saturation for smooth harmonic distortion
+                float saturated = std::tanh(input * (1.0f + distortionLevel * 4.0f));
+                channelData[sample] = saturated * 0.7f; // Prevent clipping
             }
-            
-            // NEW: Apply TV interference if enabled (THE FEATURE YOU'VE BEEN WAITING FOR!)
-            if (tvInterferenceLevel > 0.5f)
-            {
-                input = applyTVInterference(input, phoneType, tvInterferenceLevel);
-            }
-            
-            // Apply distortion
-            if (distortionAmount > 0.0f)
-            {
-                input = applyPhoneDistortion(input, phoneType, distortionAmount);
-            }
-            
-            // TEMPORARILY DISABLED: Too many processing layers making it sound robotic
-            /*
-            // PHASE 5: Advanced Audio Processing
-            
-            // Apply codec simulation for authentic digital compression
-            if (codecType != GSM_FullRate || packetLoss > 0.0f)
-            {
-                input = applyCodecSimulation(input, codecType, 0.8f);
-            }
-            
-            // Apply packet loss and jitter
-            if (packetLoss > 0.0f)
-            {
-                input = applyPacketLoss(input, packetLoss);
-                input = applyJitter(input, packetLoss * 0.5f); // Jitter related to packet loss
-            }
-            */
-            
-            channelData[sample] = input;
         }
     }
-    
-    // Apply stereo positioning (affects entire buffer after processing)
-    if (callPosition != Center)
-    {
-        applyStereoPositioning(buffer, callPosition, 1.0f);
+
+    // PHASE 4: Apply compression/limiting
+    if (compressionLevel > 0.01f) {
+        const float threshold = 0.4f - (compressionLevel * 0.3f); // Dynamic threshold
+        const float ratio = 1.0f + (compressionLevel * 9.0f);     // 1:1 to 10:1 ratio
+        const float makeupGain = 1.0f + (compressionLevel * 0.8f); // Compensate gain reduction
+
+        for (int channel = 0; channel < totalNumInputChannels; ++channel) {
+            auto* channelData = buffer.getWritePointer(channel);
+            for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
+                float input = channelData[sample];
+                float absInput = std::abs(input);
+                
+                if (absInput > threshold) {
+                    float excess = absInput - threshold;
+                    float compressedExcess = excess / ratio;
+                    float compressedLevel = threshold + compressedExcess;
+                    
+                    channelData[sample] = (input >= 0.0f ? 1.0f : -1.0f) * compressedLevel * makeupGain;
+                } else {
+                    channelData[sample] = input * makeupGain;
+                }
+            }
+        }
+    }
+
+    // PHASE 5: Apply interference/artifacts
+    if (interferenceLevel > 0.01f) {
+        for (int channel = 0; channel < totalNumInputChannels; ++channel) {
+            auto* channelData = buffer.getWritePointer(channel);
+            for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
+                // Digital quantization artifacts
+                float quantizationNoise = (random.nextFloat() - 0.5f) * interferenceLevel * 0.03f;
+                
+                // RF interference (high-frequency buzzing)
+                float rfNoise = std::sin(2.0f * M_PI * 2000.0f * sample / getSampleRate()) * interferenceLevel * 0.02f;
+                
+                channelData[sample] += quantizationNoise + rfNoise;
+            }
+        }
+    }
+
+    // PHASE 6: Apply TV interference (if enabled)
+    if (tvInterferenceOn) {
+        static int tvSampleCounter = 0;
+        
+        for (int channel = 0; channel < totalNumInputChannels; ++channel) {
+            auto* channelData = buffer.getWritePointer(channel);
+            for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
+                // SAFE TV interference (much reduced amplitude)
+                float horizontalSync = std::sin(2.0f * M_PI * 1000.0f * tvSampleCounter / getSampleRate()) * 0.03f; // Reduced from 0.15f
+                float verticalNoise = (random.nextFloat() - 0.5f) * 0.015f; // Much safer amplitude
+                
+                channelData[sample] += horizontalSync + verticalNoise;
+                tvSampleCounter++;
+            }
+        }
+    }
+
+    // PHASE 7: WET/DRY MIX - THE MISSING PIECE! 🔥
+    for (int channel = 0; channel < totalNumInputChannels; ++channel) {
+        auto* processedData = buffer.getWritePointer(channel);
+        const auto* originalData = originalBuffer.getReadPointer(channel);
+        
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
+            // Mix original (dry) with processed (wet) signal
+            processedData[sample] = originalData[sample] * (1.0f - wetDryMix) + processedData[sample] * wetDryMix;
+        }
     }
 }
 
@@ -703,7 +695,6 @@ void TestAudioProcessor::loadPhonePreset(PhoneType phoneType)
             
             // FIX: Immediately update ALL parameters (no carryover)
             apvts.getParameter(DISTORTION_ID)->setValueNotifyingHost(0.2f);    // 20% - Small speaker distortion
-            apvts.getParameter(NOISE_LEVEL_ID)->setValueNotifyingHost(0.05f);  // 5% - GSM codec noise (reduced from 8% to fix stuck issue)
             apvts.getParameter(INTERFERENCE_ID)->setValueNotifyingHost(0.15f); // 15% - GSM RF interference
             apvts.getParameter(COMPRESSION_ID)->setValueNotifyingHost(0.7f);   // 70% - MUCH stronger GSM compression
             break;
@@ -717,7 +708,6 @@ void TestAudioProcessor::loadPhonePreset(PhoneType phoneType)
             
             // FIX: Immediately update ALL parameters (no carryover)
             apvts.getParameter(DISTORTION_ID)->setValueNotifyingHost(0.03f);   // 3% - Minimal digital distortion
-            apvts.getParameter(NOISE_LEVEL_ID)->setValueNotifyingHost(0.02f);  // 2% - Advanced noise cancellation
             apvts.getParameter(INTERFERENCE_ID)->setValueNotifyingHost(0.04f); // 4% - Digital shielding  
             apvts.getParameter(COMPRESSION_ID)->setValueNotifyingHost(0.35f);  // 35% - Modern codec compression
             break;
@@ -731,7 +721,6 @@ void TestAudioProcessor::loadPhonePreset(PhoneType phoneType)
             
             // FIX: Immediately update ALL parameters (no carryover)
             apvts.getParameter(DISTORTION_ID)->setValueNotifyingHost(0.35f);   // 35% - Tiny speaker, analog circuits
-            apvts.getParameter(NOISE_LEVEL_ID)->setValueNotifyingHost(0.12f);  // 12% - Poor electrical shielding
             apvts.getParameter(INTERFERENCE_ID)->setValueNotifyingHost(0.18f); // 18% - Very susceptible to RF
             apvts.getParameter(COMPRESSION_ID)->setValueNotifyingHost(0.8f);   // 80% - VERY aggressive analog compression
             break;
@@ -1252,15 +1241,12 @@ void TestAudioProcessor::updateParameterSmoothing()
 {
     // Smooth parameter transitions for professional feel
     currentDistortion += (targetDistortion - currentDistortion) * smoothingSpeed;
-    currentNoise += (targetNoise - currentNoise) * smoothingSpeed;
     currentInterference += (targetInterference - currentInterference) * smoothingSpeed;
     currentCompression += (targetCompression - currentCompression) * smoothingSpeed;
     
     // Apply smoothed values to actual parameters (with slight delay to avoid clicks)
     if (std::abs(targetDistortion - currentDistortion) < 0.001f)
         apvts.getParameter(DISTORTION_ID)->setValueNotifyingHost(targetDistortion);
-    if (std::abs(targetNoise - currentNoise) < 0.001f)  
-        apvts.getParameter(NOISE_LEVEL_ID)->setValueNotifyingHost(targetNoise);
     if (std::abs(targetInterference - currentInterference) < 0.001f)
         apvts.getParameter(INTERFERENCE_ID)->setValueNotifyingHost(targetInterference);
     if (std::abs(targetCompression - currentCompression) < 0.001f)

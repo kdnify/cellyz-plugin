@@ -92,9 +92,16 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     distortionSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 20);
     addAndMakeVisible(distortionSlider);
     
-    noiseLevelSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    noiseLevelSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 20);
-    addAndMakeVisible(noiseLevelSlider);
+    compressionSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    compressionSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 20);
+    addAndMakeVisible(compressionSlider);
+    
+    // NEW: Wet/Dry Mix knob - THE MISSING PIECE!
+    wetDrySlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    wetDrySlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 20);
+    addAndMakeVisible(wetDrySlider);
+    
+
     
     // GAME-CHANGING: Signal Quality ComboBox (replaces interference slider)
     signalQualityBox.addItem("Perfect (5 bars)", 1);
@@ -105,10 +112,6 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     signalQualityBox.addItem("Auto Dynamic", 6);
     signalQualityBox.setSelectedId(1); // FIX: Default to Perfect Signal (5 bars) instead of Auto Dynamic
     addAndMakeVisible(signalQualityBox);
-    
-    compressionSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    compressionSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 20);
-    addAndMakeVisible(compressionSlider);
     
     // NEW: Red interference error button
     interferenceButton.setButtonText("TV");
@@ -127,13 +130,14 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
         audioProcessor.apvts, TestAudioProcessor::HIGH_CUT_ID, highCutSlider);
     distortionAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         audioProcessor.apvts, TestAudioProcessor::DISTORTION_ID, distortionSlider);
-    noiseLevelAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        audioProcessor.apvts, TestAudioProcessor::NOISE_LEVEL_ID, noiseLevelSlider);
+
     // GAME-CHANGING: Signal Quality ComboBox Attachment  
     signalQualityAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         audioProcessor.apvts, TestAudioProcessor::INTERFERENCE_PRESET_ID, signalQualityBox);
     compressionAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         audioProcessor.apvts, TestAudioProcessor::COMPRESSION_ID, compressionSlider);
+    wetDryAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        audioProcessor.apvts, TestAudioProcessor::WET_DRY_MIX_ID, wetDrySlider);
     
     // NEW: Interference button attachment
     interferenceButtonAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -158,11 +162,20 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     distortionLabel.setFont(juce::Font(12.0f));
     addAndMakeVisible(distortionLabel);
     
-    noiseLevelLabel.setText("Noise", juce::dontSendNotification);
-    noiseLevelLabel.setJustificationType(juce::Justification::centred);
-    noiseLevelLabel.setColour(juce::Label::textColourId, juce::Colours::white);
-    noiseLevelLabel.setFont(juce::Font(12.0f));
-    addAndMakeVisible(noiseLevelLabel);
+    compressionLabel.setText("Compression", juce::dontSendNotification);
+    compressionLabel.setJustificationType(juce::Justification::centred);
+    compressionLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    compressionLabel.setFont(juce::Font(12.0f));
+    addAndMakeVisible(compressionLabel);
+    
+    // NEW: Wet/Dry Mix label - THE MISSING PIECE!
+    wetDryLabel.setText("Wet/Dry Mix", juce::dontSendNotification);
+    wetDryLabel.setJustificationType(juce::Justification::centred);
+    wetDryLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    wetDryLabel.setFont(juce::Font(12.0f));
+    addAndMakeVisible(wetDryLabel);
+    
+
     
     // GAME-CHANGING: Signal Quality Label (replaces interference)
     signalQualityLabel.setText("Signal Quality", juce::dontSendNotification);
@@ -184,12 +197,6 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     interferenceLabel.setColour(juce::Label::textColourId, juce::Colours::white);
     interferenceLabel.setFont(juce::Font(12.0f));
     // addAndMakeVisible(interferenceLabel); // COMMENTED OUT - replaced by signal quality
-    
-    compressionLabel.setText("Compression", juce::dontSendNotification);
-    compressionLabel.setJustificationType(juce::Justification::centred);
-    compressionLabel.setColour(juce::Label::textColourId, juce::Colours::white);
-    compressionLabel.setFont(juce::Font(12.0f));
-    addAndMakeVisible(compressionLabel);
     
     // NEW: Red TV interference button label
     interferenceButtonLabel.setText("TV Buzz", juce::dontSendNotification);
@@ -232,7 +239,7 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     
     // Set initial Nokia characteristic settings (realistic GSM phone)
     audioProcessor.apvts.getParameter(TestAudioProcessor::DISTORTION_ID)->setValueNotifyingHost(0.2f);    // 20% distortion
-    audioProcessor.apvts.getParameter(TestAudioProcessor::NOISE_LEVEL_ID)->setValueNotifyingHost(0.08f);  // 8% noise
+
     audioProcessor.apvts.getParameter(TestAudioProcessor::INTERFERENCE_ID)->setValueNotifyingHost(0.15f); // 15% interference
     audioProcessor.apvts.getParameter(TestAudioProcessor::COMPRESSION_ID)->setValueNotifyingHost(0.5f);   // 50% compression
     
@@ -246,7 +253,7 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     lowCutSlider.setLookAndFeel(phoneLookAndFeel.get());
     highCutSlider.setLookAndFeel(phoneLookAndFeel.get());
     distortionSlider.setLookAndFeel(phoneLookAndFeel.get());
-    noiseLevelSlider.setLookAndFeel(phoneLookAndFeel.get());
+    wetDrySlider.setLookAndFeel(phoneLookAndFeel.get());
     signalQualityBox.setLookAndFeel(phoneLookAndFeel.get());  // FIXED: Changed from interferenceSlider
     compressionSlider.setLookAndFeel(phoneLookAndFeel.get());
     interferenceButton.setLookAndFeel(phoneLookAndFeel.get());
@@ -348,13 +355,13 @@ void TestAudioProcessorEditor::resized()
     highCutSlider.setBounds(rightControlsArea.getX() + 10, rightStartY + 60, 120, 50); // More height for text box
     highCutLabel.setBounds(rightControlsArea.getX() + 20, rightStartY + 42, 100, 15);
     
-    // Noise Level (middle right)
-    noiseLevelSlider.setBounds(rightControlsArea.getX() + 35, rightStartY + leftKnobHeight + leftKnobSpacing, 70, 70);
-    noiseLevelLabel.setBounds(rightControlsArea.getX() + 20, rightStartY + leftKnobHeight + leftKnobSpacing + 72, 100, 15);
+    // Compression (middle right) - MOVED UP from where noise was!
+    compressionSlider.setBounds(rightControlsArea.getX() + 35, rightStartY + leftKnobHeight + leftKnobSpacing, 70, 70);
+    compressionLabel.setBounds(rightControlsArea.getX() + 20, rightStartY + leftKnobHeight + leftKnobSpacing + 72, 100, 15);
     
-    // Compression (bottom right)
-    compressionSlider.setBounds(rightControlsArea.getX() + 35, rightStartY + 2 * (leftKnobHeight + leftKnobSpacing), 70, 70);
-    compressionLabel.setBounds(rightControlsArea.getX() + 20, rightStartY + 2 * (leftKnobHeight + leftKnobSpacing) + 72, 100, 15);
+    // NEW: Wet/Dry Mix (bottom right) - THE MISSING PIECE! 🔥
+    wetDrySlider.setBounds(rightControlsArea.getX() + 35, rightStartY + 2 * (leftKnobHeight + leftKnobSpacing), 70, 70);
+    wetDryLabel.setBounds(rightControlsArea.getX() + 20, rightStartY + 2 * (leftKnobHeight + leftKnobSpacing) + 72, 100, 15);
     
     // Position RED ERROR LED BUTTON (below phone, centered)
     auto errorButtonX = centerArea.getCentreX() - 30;
@@ -396,7 +403,6 @@ void TestAudioProcessorEditor::buttonClicked (juce::Button* button)
         
         // Set Nokia characteristic audio settings (realistic GSM phone) - using target values for smooth transitions
         audioProcessor.targetDistortion = 0.2f;    // 20% distortion
-        audioProcessor.targetNoise = 0.08f;        // 8% noise
         audioProcessor.targetInterference = 0.15f; // 15% interference
         audioProcessor.targetCompression = 0.5f;   // 50% compression
         
@@ -422,7 +428,6 @@ void TestAudioProcessorEditor::buttonClicked (juce::Button* button)
         
         // Set iPhone characteristic audio settings (clean modern smartphone) - using target values for smooth transitions
         audioProcessor.targetDistortion = 0.05f;   // 5% minimal distortion
-        audioProcessor.targetNoise = 0.03f;        // 3% advanced noise cancellation
         audioProcessor.targetInterference = 0.04f; // 4% digital shielding
         audioProcessor.targetCompression = 0.2f;   // 20% modern compression
         
@@ -453,7 +458,6 @@ void TestAudioProcessorEditor::buttonClicked (juce::Button* button)
         
         // Set Sony Ericsson characteristic audio settings (vintage analog flip phone) - using target values for smooth transitions
         audioProcessor.targetDistortion = 0.35f;   // 35% high distortion
-        audioProcessor.targetNoise = 0.12f;        // 12% electrical noise
         audioProcessor.targetInterference = 0.18f; // 18% RF susceptibility
         audioProcessor.targetCompression = 0.6f;   // 60% aggressive compression
         
@@ -961,7 +965,7 @@ float TestAudioProcessorEditor::getCurrentAudioLevel()
     
     // Simulate audio activity based on parameter changes
     level += std::abs(distortionSlider.getValue()) * 0.3f;
-    level += std::abs(noiseLevelSlider.getValue()) * 0.2f;
+    level += std::abs(wetDrySlider.getValue()) * 0.1f;  // Wet/dry mix contributes to visual level
     level += (signalQualityBox.getSelectedItemIndex() / 5.0f) * 0.2f;  // FIXED: Changed from interferenceSlider
     
     return juce::jmin(1.0f, level);
@@ -1479,7 +1483,7 @@ void TestAudioProcessorEditor::updateAdaptiveTypography()
     lowCutLabel.setFont(currentFont);
     highCutLabel.setFont(currentFont);
     distortionLabel.setFont(currentFont);
-    noiseLevelLabel.setFont(currentFont);
+    wetDryLabel.setFont(currentFont);
     interferenceLabel.setFont(currentFont);
     compressionLabel.setFont(currentFont);
     interferenceButtonLabel.setFont(currentFont.withHeight(10.0f));

@@ -165,8 +165,8 @@ private:
     juce::Slider lowCutSlider;      // Back to slider for better control
     juce::Slider highCutSlider;     // Back to slider for better control
     juce::Slider distortionSlider;
-    juce::Slider noiseLevelSlider;
     juce::Slider compressionSlider;
+    juce::Slider wetDrySlider;      // NEW: Wet/Dry Mix - THE MISSING PIECE!
     
     // GAME-CHANGING: Signal Quality Control (replaces interference)
     juce::ComboBox signalQualityBox; // Choice between Perfect, Good, Fair, Poor, Breaking Up, Auto Dynamic
@@ -183,8 +183,8 @@ private:
     juce::Label lowCutLabel;
     juce::Label highCutLabel;
     juce::Label distortionLabel;
-    juce::Label noiseLevelLabel;
     juce::Label compressionLabel;
+    juce::Label wetDryLabel;                // NEW: Wet/Dry Mix label
     juce::Label signalQualityLabel;         // NEW: Signal Quality label
     juce::Label signalStrengthLabel;        // NEW: Signal Strength status label
     
@@ -196,8 +196,8 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> lowCutAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> highCutAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> distortionAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> noiseLevelAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> compressionAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> wetDryAttachment;  // NEW: Wet/Dry Mix attachment
     
     // GAME-CHANGING: Signal Quality Attachment
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> signalQualityAttachment;

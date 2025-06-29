@@ -58,10 +58,10 @@ public:
     static const juce::String HIGH_CUT_ID;
     static const juce::String DISTORTION_ID;
     static const juce::String PHONE_TYPE_ID;
-    static const juce::String NOISE_LEVEL_ID;
     static const juce::String INTERFERENCE_ID;
     static const juce::String COMPRESSION_ID;
     static const juce::String TV_INTERFERENCE_ID;  // NEW: TV interference toggle
+    static const juce::String WET_DRY_MIX_ID;      // NEW: Wet/Dry mix - THE MISSING PIECE!
     
     // PHASE 5: Advanced Audio Processing
     static const juce::String CODEC_TYPE_ID;       // Real codec simulation
@@ -218,11 +218,10 @@ public:
     // NEW: Parameter smoothing for professional transitions
     void updateParameterSmoothing();
     
-    // Public target values for smooth parameter transitions (accessible from editor)
-    float targetDistortion = 0.0f;       // Target distortion value
-    float targetNoise = 0.0f;             // Target noise value  
-    float targetInterference = 0.0f;      // Target interference value
-    float targetCompression = 0.0f;       // Target compression value
+    // Smooth parameter transitions for phone presets (fixes jarring parameter jumps)
+    float targetDistortion = 0.0f;      // Target distortion value
+    float targetInterference = 0.0f;    // Target interference value
+    float targetCompression = 0.0f;     // Target compression value
 
 private:
     //==============================================================================
@@ -234,15 +233,15 @@ private:
     juce::dsp::ProcessorDuplicator<juce::dsp::IIR::Filter<float>, juce::dsp::IIR::Coefficients<float>> lowCutFilter;
     juce::dsp::ProcessorDuplicator<juce::dsp::IIR::Filter<float>, juce::dsp::IIR::Coefficients<float>> highCutFilter;
     
-    // Parameter atomic pointers for thread-safe access
-    std::atomic<float>* lowCutParam = nullptr;
-    std::atomic<float>* highCutParam = nullptr;
-    std::atomic<float>* distortionParam = nullptr;
-    std::atomic<float>* phoneTypeParam = nullptr;
-    std::atomic<float>* noiseLevelParam = nullptr;
-    std::atomic<float>* interferenceParam = nullptr;
-    std::atomic<float>* compressionParam = nullptr;
-    std::atomic<float>* tvInterferenceParam = nullptr;  // NEW: TV interference toggle
+    // Atomic parameter pointers for thread-safe access
+    std::atomic<float>* lowCutParam;
+    std::atomic<float>* highCutParam;
+    std::atomic<float>* distortionParam;
+    std::atomic<float>* phoneTypeParam;
+    std::atomic<float>* interferenceParam;
+    std::atomic<float>* compressionParam;
+    std::atomic<float>* tvInterferenceParam;  // NEW: TV interference toggle  
+    std::atomic<float>* wetDryMixParam;       // NEW: Wet/Dry mix - THE MISSING PIECE!
     
     // PHASE 5: Advanced Audio Processing Parameters
     std::atomic<float>* codecTypeParam = nullptr;       // Codec simulation type
@@ -411,10 +410,9 @@ private:
     juce::Random ambienceRandom;          // Random for ambience variations
     
     // NEW: Parameter smoothing for professional transitions (private implementation details)
-    float currentDistortion = 0.0f;       // Current smoothed distortion
-    float currentNoise = 0.0f;            // Current smoothed noise
-    float currentInterference = 0.0f;     // Current smoothed interference
-    float currentCompression = 0.0f;      // Current smoothed compression
+    float currentDistortion = 0.0f;     // Current smoothed distortion
+    float currentInterference = 0.0f;   // Current smoothed interference
+    float currentCompression = 0.0f;    // Current smoothed compression
     float smoothingSpeed = 0.002f;        // Smoothing rate (200ms transition)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TestAudioProcessor)
