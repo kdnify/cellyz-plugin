@@ -33,7 +33,7 @@ Type: filesandordirs; Name: "{commoncf}\VST3\Cellyz.vst3"
 
 [Files]
 ; VST3 Plugin - Install to common VST3 directory (automatically detected by DAWs)
-Source: "artifacts\Cellyz.vst3\*"; DestDir: "{commoncf}\VST3\Cellyz.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\artifacts\Cellyz.vst3\*"; DestDir: "{commoncf}\VST3\Cellyz.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Registry]
 ; Register VST3 plugin
