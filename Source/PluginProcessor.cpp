@@ -137,7 +137,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout TestAudioProcessor::createPa
     // Background Noise Level (0% - 100%)
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
         NOISE_LEVEL_ID, "Noise Level",
-        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.2f,
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.0f,
         juce::String(), juce::AudioProcessorParameter::genericParameter,
         [](float value, int) { return juce::String(static_cast<int>(value * 100)) + " %"; }
     ));
@@ -209,7 +209,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout TestAudioProcessor::createPa
         INTERFERENCE_PRESET_ID,
         "Signal Quality",
         juce::StringArray{"Perfect (5 bars)", "Good (4 bars)", "Fair (3 bars)", "Poor (2 bars)", "Breaking Up (1 bar)", "Auto Dynamic"},
-        5 // Default to Auto Dynamic - THE BEST FEATURE!
+        0 // FIX: Default to Perfect Signal (5 bars) instead of Auto Dynamic
     ));
     
     return { parameters.begin(), parameters.end() };
@@ -700,12 +700,12 @@ void TestAudioProcessor::loadPhonePreset(PhoneType phoneType)
                 apvts.getParameter(LOW_CUT_ID)->convertTo0to1(400.0f));
             apvts.getParameter(HIGH_CUT_ID)->setValueNotifyingHost(
                 apvts.getParameter(HIGH_CUT_ID)->convertTo0to1(4000.0f));
-                
-            // Set target values for smooth parameter transitions
-            targetDistortion = 0.2f;    // 20% - Small speaker distortion
-            targetNoise = 0.08f;        // 8% - GSM codec noise
-            targetInterference = 0.15f; // 15% - GSM RF interference  
-            targetCompression = 0.5f;   // 50% - Heavy GSM compression
+            
+            // FIX: Immediately update ALL parameters (no carryover)
+            apvts.getParameter(DISTORTION_ID)->setValueNotifyingHost(0.2f);    // 20% - Small speaker distortion
+            apvts.getParameter(NOISE_LEVEL_ID)->setValueNotifyingHost(0.05f);  // 5% - GSM codec noise (reduced from 8% to fix stuck issue)
+            apvts.getParameter(INTERFERENCE_ID)->setValueNotifyingHost(0.15f); // 15% - GSM RF interference
+            apvts.getParameter(COMPRESSION_ID)->setValueNotifyingHost(0.7f);   // 70% - MUCH stronger GSM compression
             break;
             
         case iPhone:
@@ -714,12 +714,12 @@ void TestAudioProcessor::loadPhonePreset(PhoneType phoneType)
                 apvts.getParameter(LOW_CUT_ID)->convertTo0to1(300.0f));
             apvts.getParameter(HIGH_CUT_ID)->setValueNotifyingHost(
                 apvts.getParameter(HIGH_CUT_ID)->convertTo0to1(8000.0f));
-                
-            // Set target values for smooth parameter transitions
-            targetDistortion = 0.05f;   // 5% - Minimal digital distortion
-            targetNoise = 0.03f;        // 3% - Advanced noise cancellation
-            targetInterference = 0.04f; // 4% - Digital shielding
-            targetCompression = 0.2f;   // 20% - Modern codec compression
+            
+            // FIX: Immediately update ALL parameters (no carryover)
+            apvts.getParameter(DISTORTION_ID)->setValueNotifyingHost(0.03f);   // 3% - Minimal digital distortion
+            apvts.getParameter(NOISE_LEVEL_ID)->setValueNotifyingHost(0.02f);  // 2% - Advanced noise cancellation
+            apvts.getParameter(INTERFERENCE_ID)->setValueNotifyingHost(0.04f); // 4% - Digital shielding  
+            apvts.getParameter(COMPRESSION_ID)->setValueNotifyingHost(0.35f);  // 35% - Modern codec compression
             break;
             
         case SonyEricsson:
@@ -728,17 +728,20 @@ void TestAudioProcessor::loadPhonePreset(PhoneType phoneType)
                 apvts.getParameter(LOW_CUT_ID)->convertTo0to1(250.0f));
             apvts.getParameter(HIGH_CUT_ID)->setValueNotifyingHost(
                 apvts.getParameter(HIGH_CUT_ID)->convertTo0to1(2500.0f));
-                
-            // Set target values for smooth parameter transitions
-            targetDistortion = 0.35f;   // 35% - Tiny speaker, analog circuits
-            targetNoise = 0.12f;        // 12% - Poor electrical shielding
-            targetInterference = 0.18f; // 18% - Very susceptible to RF
-            targetCompression = 0.6f;   // 60% - Aggressive analog compression
+            
+            // FIX: Immediately update ALL parameters (no carryover)
+            apvts.getParameter(DISTORTION_ID)->setValueNotifyingHost(0.35f);   // 35% - Tiny speaker, analog circuits
+            apvts.getParameter(NOISE_LEVEL_ID)->setValueNotifyingHost(0.12f);  // 12% - Poor electrical shielding
+            apvts.getParameter(INTERFERENCE_ID)->setValueNotifyingHost(0.18f); // 18% - Very susceptible to RF
+            apvts.getParameter(COMPRESSION_ID)->setValueNotifyingHost(0.8f);   // 80% - VERY aggressive analog compression
             break;
     }
     
     // Update phone type parameter
     apvts.getParameter(PHONE_TYPE_ID)->setValueNotifyingHost(static_cast<float>(phoneType) / 2.0f);
+    
+    // FIX: Remove target value system that was causing carryover
+    // All parameters now update immediately via setValueNotifyingHost
 }
 
 //==============================================================================
@@ -792,9 +795,10 @@ float TestAudioProcessor::applyTVInterference(float input, PhoneType phoneType, 
 float TestAudioProcessor::generateNokiaTVInterference(float input, float intensity)
 {
     // Nokia 3310 near CRT TV: Classic GSM interference with TV scanline buzz
+    // FIX: Much safer levels to prevent speaker damage
     
-    // TV scanline frequency (15.625 kHz for PAL, 15.734 kHz for NTSC)
-    tvScanlinePhase += 2.0f * juce::MathConstants<float>::pi * 15625.0f / static_cast<float>(currentSampleRate);
+    // TV scanline frequency reduced to safer range (1kHz instead of 15.625 kHz)
+    tvScanlinePhase += 2.0f * juce::MathConstants<float>::pi * 1000.0f / static_cast<float>(currentSampleRate);
     
     // GSM burst pattern interfering with TV
     tvBurstTimer += 1.0f / static_cast<float>(currentSampleRate);
@@ -804,21 +808,22 @@ float TestAudioProcessor::generateNokiaTVInterference(float input, float intensi
         tvBurstState = (tvBurstState + 1) % 4; // 4-state burst pattern
     }
     
-    // Generate authentic Nokia TV buzz
+    // Generate authentic Nokia TV buzz - MUCH SAFER LEVELS
     float tvBuzz = 0.0f;
     if (tvBurstState == 0 || tvBurstState == 2) // Active burst states
     {
         // 217Hz GSM carrier with TV scanline modulation
         tvInterferencePhase += 2.0f * juce::MathConstants<float>::pi * 217.0f / static_cast<float>(currentSampleRate);
         float gsmCarrier = std::sin(tvInterferencePhase);
-        float scanlineModulation = std::sin(tvScanlinePhase) * 0.3f;
+        float scanlineModulation = std::sin(tvScanlinePhase) * 0.1f; // Reduced from 0.3f
         
-        tvBuzz = gsmCarrier * (0.8f + scanlineModulation) * 0.15f * intensity;
+        // FIX: Much safer amplitude (0.03f instead of 0.15f)
+        tvBuzz = gsmCarrier * (0.8f + scanlineModulation) * 0.03f * intensity;
         
-        // Add digital clicking from phone's RF interference
-        if (tvRandom.nextFloat() > 0.92f)
+        // FIX: Much quieter digital clicking (0.02f instead of 0.2f)
+        if (tvRandom.nextFloat() > 0.98f) // Less frequent pops
         {
-            tvBuzz += (tvRandom.nextFloat() * 2.0f - 1.0f) * 0.2f * intensity;
+            tvBuzz += (tvRandom.nextFloat() * 2.0f - 1.0f) * 0.02f * intensity;
         }
     }
     
@@ -828,22 +833,23 @@ float TestAudioProcessor::generateNokiaTVInterference(float input, float intensi
 float TestAudioProcessor::generateIPhoneTVInterference(float input, float intensity)
 {
     // iPhone near modern LCD/LED TV: Digital switching noise and power supply whine
+    // FIX: Much safer levels
     
     // LCD refresh rate interference (60Hz and harmonics)
     tvScanlinePhase += 2.0f * juce::MathConstants<float>::pi * 60.0f / static_cast<float>(currentSampleRate);
     tvInterferencePhase += 2.0f * juce::MathConstants<float>::pi * 120.0f / static_cast<float>(currentSampleRate);
     
     // Digital switching noise from iPhone's power management
-    float switchingNoise = std::sin(tvInterferencePhase) * 0.1f;
-    float refreshNoise = std::sin(tvScanlinePhase) * 0.05f;
+    float switchingNoise = std::sin(tvInterferencePhase) * 0.03f; // Reduced from 0.1f
+    float refreshNoise = std::sin(tvScanlinePhase) * 0.02f;       // Reduced from 0.05f
     
-    // Combine with subtle digital artifacts
-    float digitalBuzz = (switchingNoise + refreshNoise) * intensity * 0.08f;
+    // Combine with subtle digital artifacts - MUCH SAFER
+    float digitalBuzz = (switchingNoise + refreshNoise) * intensity * 0.02f; // Reduced from 0.08f
     
-    // Occasional digital pops from data transmission
-    if (tvRandom.nextFloat() > 0.995f)
+    // FIX: Much quieter occasional digital pops
+    if (tvRandom.nextFloat() > 0.998f) // Much less frequent
     {
-        digitalBuzz += (tvRandom.nextFloat() * 2.0f - 1.0f) * 0.1f * intensity;
+        digitalBuzz += (tvRandom.nextFloat() * 2.0f - 1.0f) * 0.01f * intensity; // Reduced from 0.1f
     }
     
     return input + digitalBuzz;
@@ -852,28 +858,29 @@ float TestAudioProcessor::generateIPhoneTVInterference(float input, float intens
 float TestAudioProcessor::generateSonyTVInterference(float input, float intensity)
 {
     // Sony Ericsson near old CRT TV: Analog interference with magnetic field buzz
+    // FIX: Much safer levels
     
-    // CRT horizontal sweep frequency (15.625 kHz) with analog flutter
-    float flutterAmount = tvRandom.nextFloat() * 0.02f - 0.01f;
-    tvScanlinePhase += 2.0f * juce::MathConstants<float>::pi * (15625.0f + flutterAmount * 100.0f) / static_cast<float>(currentSampleRate);
+    // CRT horizontal sweep frequency reduced to safer range (500Hz instead of 15.625 kHz)
+    float flutterAmount = tvRandom.nextFloat() * 0.01f - 0.005f; // Reduced flutter
+    tvScanlinePhase += 2.0f * juce::MathConstants<float>::pi * (500.0f + flutterAmount * 50.0f) / static_cast<float>(currentSampleRate);
     
     // Magnetic field interference from CRT deflection coils
     tvInterferencePhase += 2.0f * juce::MathConstants<float>::pi * 50.0f / static_cast<float>(currentSampleRate); // 50Hz mains hum
     
-    // Generate analog TV interference
-    float magneticBuzz = std::sin(tvScanlinePhase) * 0.12f;
-    float mainsHum = std::sin(tvInterferencePhase) * 0.06f;
+    // Generate analog TV interference - MUCH SAFER LEVELS
+    float magneticBuzz = std::sin(tvScanlinePhase) * 0.03f; // Reduced from 0.12f
+    float mainsHum = std::sin(tvInterferencePhase) * 0.02f; // Reduced from 0.06f
     
-    // Add analog static and crackle
-    float analogStatic = (tvRandom.nextFloat() * 2.0f - 1.0f) * 0.03f;
+    // Add analog static and crackle - QUIETER
+    float analogStatic = (tvRandom.nextFloat() * 2.0f - 1.0f) * 0.01f; // Reduced from 0.03f
     
-    // Combine all analog interference
-    float analogInterference = (magneticBuzz + mainsHum + analogStatic) * intensity * 0.1f;
+    // Combine all analog interference - MUCH SAFER
+    float analogInterference = (magneticBuzz + mainsHum + analogStatic) * intensity * 0.03f; // Reduced from 0.1f
     
-    // Occasional analog pops from phone's RF affecting CRT
-    if (tvRandom.nextFloat() > 0.985f)
+    // FIX: Much quieter occasional analog pops
+    if (tvRandom.nextFloat() > 0.995f) // Less frequent
     {
-        analogInterference += (tvRandom.nextFloat() * 2.0f - 1.0f) * 0.15f * intensity;
+        analogInterference += (tvRandom.nextFloat() * 2.0f - 1.0f) * 0.03f * intensity; // Reduced from 0.15f
     }
     
     return input + analogInterference;

@@ -103,7 +103,7 @@ TestAudioProcessorEditor::TestAudioProcessorEditor (TestAudioProcessor& p)
     signalQualityBox.addItem("Poor (2 bars)", 4);
     signalQualityBox.addItem("Breaking Up (1 bar)", 5);
     signalQualityBox.addItem("Auto Dynamic", 6);
-    signalQualityBox.setSelectedId(6); // Default to Auto Dynamic
+    signalQualityBox.setSelectedId(1); // FIX: Default to Perfect Signal (5 bars) instead of Auto Dynamic
     addAndMakeVisible(signalQualityBox);
     
     compressionSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
