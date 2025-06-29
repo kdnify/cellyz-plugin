@@ -58,6 +58,14 @@ jobs:
         cd Builds/Windows
         msbuild Cellyz.sln -p:Configuration=Release -p:Platform=x64 -v:minimal
 
+    - name: Setup Inno Setup (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        curl -L -o innosetup.exe "https://files.jrsoftware.org/is/6/innosetup-6.2.2.exe"
+        ./innosetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
+        echo "C:\Program Files (x86)\Inno Setup 6" >> $GITHUB_PATH
+      shell: bash
+
     - name: Package Artifacts
       shell: bash
       run: |
@@ -73,25 +81,39 @@ jobs:
             cp -r "Builds/MacOSX/build/Release/test.vst3" artifacts/
             echo "✓ Copied VST3 plugin"
           fi
-        else
-          echo "Collecting Windows artifacts..."
-          find Builds/Windows -name "*.dll" -o -name "*.vst3" | head -10
-          # Check multiple possible locations for Windows build output
-          if [ -d "Builds/Windows/x64/Release/VST3/Cellyz.vst3" ]; then
-            cp -r "Builds/Windows/x64/Release/VST3/Cellyz.vst3" artifacts/
-            echo "✓ Copied VST3 plugin from x64/Release/VST3/"
-          elif [ -d "Builds/Windows/x64/Release/Cellyz.vst3" ]; then
-            cp -r "Builds/Windows/x64/Release/Cellyz.vst3" artifacts/
-            echo "✓ Copied VST3 plugin from x64/Release/"
-          elif [ -f "Builds/Windows/x64/Release/VST3/Cellyz.dll" ]; then
-            mkdir -p artifacts/Cellyz.vst3/Contents/x86_64-win
-            cp "Builds/Windows/x64/Release/VST3/Cellyz.dll" artifacts/Cellyz.vst3/Contents/x86_64-win/
-            echo "✓ Created VST3 bundle from DLL"
-          else
-            echo "⚠️ VST3 not found, searching all build outputs:"
-            find Builds/Windows -type f -name "*.dll" -o -name "*.vst3" -o -name "Cellyz*"
+                  else
+            echo "Collecting Windows artifacts..."
+            find Builds/Windows -name "*.dll" -o -name "*.vst3" | head -10
+            # Check multiple possible locations for Windows build output
+            if [ -d "Builds/Windows/x64/Release/VST3/Cellyz.vst3" ]; then
+              cp -r "Builds/Windows/x64/Release/VST3/Cellyz.vst3" artifacts/
+              echo "✓ Copied VST3 plugin from x64/Release/VST3/"
+            elif [ -d "Builds/Windows/x64/Release/Cellyz.vst3" ]; then
+              cp -r "Builds/Windows/x64/Release/Cellyz.vst3" artifacts/
+              echo "✓ Copied VST3 plugin from x64/Release/"
+            elif [ -f "Builds/Windows/x64/Release/VST3/Cellyz.dll" ]; then
+              mkdir -p artifacts/Cellyz.vst3/Contents/x86_64-win
+              cp "Builds/Windows/x64/Release/VST3/Cellyz.dll" artifacts/Cellyz.vst3/Contents/x86_64-win/
+              echo "✓ Created VST3 bundle from DLL"
+            else
+              echo "⚠️ VST3 not found, searching all build outputs:"
+              find Builds/Windows -type f -name "*.dll" -o -name "*.vst3" -o -name "Cellyz*"
+            fi
+            
+            # Build Windows installer
+            if [ -d "artifacts/Cellyz.vst3" ]; then
+              echo "Building Windows installer..."
+              cd installer
+              iscc cellyz-installer.iss
+              if [ -f "Cellyz_Phone_FX_v1.0_Setup.exe" ]; then
+                cp "Cellyz_Phone_FX_v1.0_Setup.exe" ../artifacts/
+                echo "✓ Built Windows installer"
+              else
+                echo "⚠️ Installer build failed"
+              fi
+              cd ..
+            fi
           fi
-        fi
         
         # List final artifacts
         echo "Final artifacts:"
