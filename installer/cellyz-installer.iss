@@ -5,7 +5,8 @@ AppPublisher=Cellyz Audio
 AppPublisherURL=https://github.com/kdnify/cellyz-plugin
 AppSupportURL=https://github.com/kdnify/cellyz-plugin
 AppUpdatesURL=https://github.com/kdnify/cellyz-plugin
-; No default app directory needed - we install directly to VST3
+; Required by Inno Setup but not used since we disable directory page
+DefaultDirName={tmp}\Cellyz
 DefaultGroupName=Cellyz Phone FX
 AllowNoIcons=yes
 LicenseFile=
