@@ -367,6 +367,8 @@ void TestAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     float compressionLevel = compressionParam->load();
     bool tvInterferenceOn = tvInterferenceParam->load() > 0.5f;
     float wetDryMix = wetDryMixParam->load(); // NEW: Wet/Dry mix - THE MISSING PIECE!
+    int phoneTypeIndex = static_cast<int>(phoneTypeParam->load() * 2.0f + 0.5f); // Convert 0-1 to 0-2
+    PhoneType currentPhoneType = static_cast<PhoneType>(juce::jlimit(0, 2, phoneTypeIndex));
 
     // PHASE 1: Store original signal for wet/dry mixing
     juce::AudioBuffer<float> originalBuffer;
@@ -390,41 +392,30 @@ void TestAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         highCutFilter.process(context);
     }
 
-    // PHASE 3: Apply non-linear distortion/saturation
+    // PHASE 3: Apply phone-specific distortion/saturation
     if (distortionLevel > 0.01f) {
         for (int channel = 0; channel < totalNumInputChannels; ++channel) {
             auto* channelData = buffer.getWritePointer(channel);
             for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
                 float input = channelData[sample];
                 
-                // Tanh saturation for smooth harmonic distortion
-                float saturated = std::tanh(input * (1.0f + distortionLevel * 4.0f));
-                channelData[sample] = saturated * 0.7f; // Prevent clipping
+                // Apply authentic phone-specific distortion characteristics
+                float phoneDistorted = applyPhoneDistortion(input, currentPhoneType, distortionLevel);
+                channelData[sample] = phoneDistorted;
             }
         }
     }
 
-    // PHASE 4: Apply compression/limiting
+    // PHASE 4: Apply phone-specific compression/limiting
     if (compressionLevel > 0.01f) {
-        const float threshold = 0.4f - (compressionLevel * 0.3f); // Dynamic threshold
-        const float ratio = 1.0f + (compressionLevel * 9.0f);     // 1:1 to 10:1 ratio
-        const float makeupGain = 1.0f + (compressionLevel * 0.8f); // Compensate gain reduction
-
         for (int channel = 0; channel < totalNumInputChannels; ++channel) {
             auto* channelData = buffer.getWritePointer(channel);
             for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
                 float input = channelData[sample];
-                float absInput = std::abs(input);
                 
-                if (absInput > threshold) {
-                    float excess = absInput - threshold;
-                    float compressedExcess = excess / ratio;
-                    float compressedLevel = threshold + compressedExcess;
-                    
-                    channelData[sample] = (input >= 0.0f ? 1.0f : -1.0f) * compressedLevel * makeupGain;
-                } else {
-                    channelData[sample] = input * makeupGain;
-                }
+                // Apply authentic phone-specific compression characteristics
+                float phoneCompressed = applyPhoneCompression(input, currentPhoneType, compressionLevel);
+                channelData[sample] = phoneCompressed;
             }
         }
     }
@@ -459,6 +450,18 @@ void TestAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
                 channelData[sample] += horizontalSync + verticalNoise;
                 tvSampleCounter++;
             }
+        }
+    }
+
+    // PHASE 6.5: Apply phone-specific tonal coloring (THE MISSING PIECE!)
+    for (int channel = 0; channel < totalNumInputChannels; ++channel) {
+        auto* channelData = buffer.getWritePointer(channel);
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
+            float input = channelData[sample];
+            
+            // Apply authentic phone-specific tonal characteristics
+            float phoneColored = applyPhoneTonalColor(input, currentPhoneType, 1.0f);
+            channelData[sample] = phoneColored;
         }
     }
 
